@@ -7,6 +7,7 @@ import {
   HttpCode,
   HttpStatus,
   NotFoundException,
+  Logger,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -14,15 +15,30 @@ import {
   ApiResponse,
   ApiParam,
 } from '@nestjs/swagger';
+import { InjectQueue } from '@nestjs/bullmq';
+import { Queue } from 'bullmq';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import { CompanyResearchService } from './company-research.service';
+import { Company } from '../companies/entities/company.entity';
 import { CompanyResearchResponseDto } from './dto/company-research-response.dto';
 import { TriggerResearchResponseDto } from './dto/trigger-research-response.dto';
 import { RefreshResearchResponseDto } from './dto/refresh-research-response.dto';
+import { QUEUE_COMPANY_RESEARCH, JOB_RESEARCH_COMPANY } from '../../common/constants/app.constants';
+import { CompanyResearchJobData } from '../queue/dto/company-research-job.dto';
 
 @ApiTags('Company Research')
 @Controller()
 export class CompanyResearchController {
-  constructor(private readonly researchService: CompanyResearchService) {}
+  private readonly logger = new Logger(CompanyResearchController.name);
+
+  constructor(
+    private readonly researchService: CompanyResearchService,
+    @InjectRepository(Company)
+    private readonly companyRepository: Repository<Company>,
+    @InjectQueue(QUEUE_COMPANY_RESEARCH)
+    private readonly researchQueue: Queue<CompanyResearchJobData>,
+  ) {}
 
   @Get('companies/:id/research')
   @ApiOperation({
@@ -57,12 +73,48 @@ export class CompanyResearchController {
     return this.mapToDto(research);
   }
 
+  @Get('companies/:id/research/raw')
+  @ApiOperation({
+    summary: 'Get raw crawl markdown for company',
+    description:
+      'Explicitly retrieves the full, unhydrated raw markdown scraped from the company website. ' +
+      'Kept separate to prevent query buffer bloat on standard endpoints.',
+  })
+  @ApiParam({
+    name: 'id',
+    type: 'string',
+    format: 'uuid',
+    description: 'Company unique identifier',
+    example: 'cfc7ac16-f8fc-4b42-bab2-6f80ef9ed658',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Raw markdown retrieved successfully.',
+  })
+  @ApiResponse({
+    status: HttpStatus.NOT_FOUND,
+    description: 'No research record found for the specified company.',
+  })
+  async getRawMarkdown(
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+  ): Promise<{ id: string; companyId: string; rawMarkdown: string | null }> {
+    const research = await this.researchService.getLatestWithMarkdown(id);
+    if (!research) {
+      throw new NotFoundException(`No research record found for company ID "${id}".`);
+    }
+    return {
+      id: research.id,
+      companyId: research.companyId,
+      rawMarkdown: research.rawMarkdown,
+    };
+  }
+
   @Post('companies/:id/research')
   @HttpCode(HttpStatus.ACCEPTED)
   @ApiOperation({
     summary: 'Trigger company research',
     description:
-      'Creates a pending company research record in the database. ' +
+      'Creates a pending company research record and dispatches an asynchronous BullMQ research job. ' +
       'Returns 202 Accepted.',
   })
   @ApiParam({
@@ -74,7 +126,7 @@ export class CompanyResearchController {
   })
   @ApiResponse({
     status: HttpStatus.ACCEPTED,
-    description: 'Company research request accepted and stored with PENDING status.',
+    description: 'Company research request accepted and queued with PENDING status.',
     type: TriggerResearchResponseDto,
   })
   @ApiResponse({
@@ -84,7 +136,35 @@ export class CompanyResearchController {
   async triggerResearch(
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
   ): Promise<TriggerResearchResponseDto> {
+    const company = await this.companyRepository.findOne({ where: { id } });
+    if (!company) {
+      throw new NotFoundException(`Company with ID "${id}" not found.`);
+    }
+
     const research = await this.researchService.createPendingResearch(id);
+
+    // Enqueue BullMQ research job with deduplication key
+    await this.researchQueue.add(
+      JOB_RESEARCH_COMPANY,
+      {
+        researchId: research.id,
+        companyId: company.id,
+        website: company.website,
+      },
+      {
+        jobId: `research-${company.id}`,
+        removeOnComplete: true,
+        removeOnFail: false,
+        attempts: 3,
+        backoff: {
+          type: 'exponential',
+          delay: 5000,
+        },
+      },
+    );
+
+    this.logger.log(`Dispatched BullMQ job for company: ${company.name} (Research ID: ${research.id})`);
+
     return {
       id: research.id,
       companyId: research.companyId,
@@ -98,7 +178,7 @@ export class CompanyResearchController {
   @ApiOperation({
     summary: 'Refresh existing company research',
     description:
-      'Creates a new pending research record for the company associated with the given research ID. ' +
+      'Creates a new pending research record for the company and dispatches an asynchronous BullMQ refresh job. ' +
       'Returns 202 Accepted.',
   })
   @ApiParam({
@@ -110,7 +190,7 @@ export class CompanyResearchController {
   })
   @ApiResponse({
     status: HttpStatus.ACCEPTED,
-    description: 'New research refresh record created with PENDING status.',
+    description: 'New research refresh record created and queued with PENDING status.',
     type: RefreshResearchResponseDto,
   })
   @ApiResponse({
@@ -125,7 +205,35 @@ export class CompanyResearchController {
       throw new NotFoundException(`Research record with ID "${id}" not found.`);
     }
 
-    const newPending = await this.researchService.createPendingResearch(existing.companyId);
+    const company = await this.companyRepository.findOne({ where: { id: existing.companyId } });
+    if (!company) {
+      throw new NotFoundException(`Company for research ID "${id}" not found.`);
+    }
+
+    const newPending = await this.researchService.createPendingResearch(company.id, true);
+
+    // Enqueue BullMQ research job with forced refresh
+    await this.researchQueue.add(
+      JOB_RESEARCH_COMPANY,
+      {
+        researchId: newPending.id,
+        companyId: company.id,
+        website: company.website,
+        forceRefresh: true,
+      },
+      {
+        removeOnComplete: true,
+        removeOnFail: false,
+        attempts: 3,
+        backoff: {
+          type: 'exponential',
+          delay: 5000,
+        },
+      },
+    );
+
+    this.logger.log(`Dispatched refresh BullMQ job for company: ${company.name} (Research ID: ${newPending.id})`);
+
     return {
       id: newPending.id,
       companyId: newPending.companyId,
@@ -146,6 +254,14 @@ export class CompanyResearchController {
       keywords: research.keywords || [],
       techStack: research.techStack || [],
       products: research.products || [],
+      careersPageUrl: research.careersPageUrl,
+      atsProvider: research.atsProvider,
+      isHiring: research.isHiring || false,
+      hiringSignals: research.hiringSignals || [],
+      genericContactEmails: research.genericContactEmails || [],
+      targetDepartments: research.targetDepartments || [],
+      locations: research.locations || [],
+      outreachHooks: research.outreachHooks || {},
       rawMarkdown: research.rawMarkdown,
       researchQualityScore: research.researchQualityScore,
       qualityReason: research.qualityReason,

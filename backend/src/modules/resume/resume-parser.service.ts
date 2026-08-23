@@ -38,8 +38,21 @@ export class ResumeParserService {
 
   async extractText(buffer: Buffer): Promise<string> {
     try {
-      const data = await pdfParse(buffer);
-      const cleaned = (data.text || '').replace(/\r\n/g, '\n').trim();
+      let cleaned = '';
+      try {
+        const data = await pdfParse(buffer);
+        cleaned = (data.text || '').replace(/\r\n/g, '\n').trim();
+      } catch (pdfErr: any) {
+        // Fallback: extract string tokens if PDF stream text format is present
+        const ascii = buffer.toString('latin1');
+        const textMatches = ascii.match(/\((.*?)\)\s*'/g);
+        if (textMatches && textMatches.length > 0) {
+          cleaned = textMatches.map((m) => m.slice(1, -2).replace(/\\\(/g, '(').replace(/\\\)/g, ')')).join('\n').trim();
+        } else {
+          throw pdfErr;
+        }
+      }
+
       if (cleaned.length < 30) {
         throw new Error('Insufficient readable text in PDF. The document might be an image-only scan.');
       }

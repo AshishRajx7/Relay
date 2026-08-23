@@ -1,6 +1,24 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { ResearchStatus } from '../enums/research-status.enum';
 import { CompanyPersona } from '../enums/company-persona.enum';
+import { OutreachHooksJson } from '../entities/company-research.entity';
+
+export class OutreachHooksDto implements OutreachHooksJson {
+  @ApiPropertyOptional({ example: 'Mission-critical distributed systems handling 50M+ requests daily.' })
+  whyThisCompany?: string;
+
+  @ApiPropertyOptional({ example: 'Actively expanding backend platform engineering teams following Series B.' })
+  whyNow?: string;
+
+  @ApiPropertyOptional({ example: ['Distributed consensus', 'High-throughput low-latency caching'] })
+  keyProblemsSolving?: string[];
+
+  @ApiPropertyOptional({ example: ['High ownership', 'Fast shipping cadence', 'Remote-first'] })
+  engineeringCultureSignals?: string[];
+
+  @ApiPropertyOptional({ example: ['Launched v2 Core API', 'Expanded North American hiring'] })
+  recentMilestones?: string[];
+}
 
 export class CompanyResearchResponseDto {
   @ApiProperty({ example: '7d4fa664-e9f5-4c1c-96ad-1b99fced1d72' })
@@ -36,6 +54,30 @@ export class CompanyResearchResponseDto {
   @ApiProperty({ example: ['TechFlow Cloud API', 'TechFlow CLI'] })
   products: string[];
 
+  @ApiPropertyOptional({ example: 'https://jobs.ashbyhq.com/techflow', nullable: true })
+  careersPageUrl: string | null;
+
+  @ApiPropertyOptional({ example: 'ASHBY', nullable: true })
+  atsProvider: string | null;
+
+  @ApiProperty({ example: true })
+  isHiring: boolean;
+
+  @ApiProperty({ example: ['active_ats_ashby', 'careers_page_discovered', 'recruiting_inbox_found'] })
+  hiringSignals: string[];
+
+  @ApiProperty({ example: ['careers@techflow.io', 'jobs@techflow.io'] })
+  genericContactEmails: string[];
+
+  @ApiProperty({ example: ['Engineering', 'Platform Infrastructure', 'Product'] })
+  targetDepartments: string[];
+
+  @ApiProperty({ example: ['San Francisco, CA', 'Remote US'] })
+  locations: string[];
+
+  @ApiPropertyOptional({ type: OutreachHooksDto })
+  outreachHooks: OutreachHooksDto;
+
   @ApiPropertyOptional({ example: '# TechFlow Systems\n\nAbout us...', nullable: true })
   rawMarkdown: string | null;
 
@@ -43,13 +85,13 @@ export class CompanyResearchResponseDto {
   researchQualityScore: number | null;
 
   @ApiPropertyOptional({
-    example: 'Page coverage: 25/25 | Content: 20/25 | AI: 20/25 | Keywords: 20/25',
+    example: 'Coverage: 25/25 | Volume: 25/25 (1800 words) | AI: 25/25 | Keywords: 25/25 (10 terms)',
     nullable: true,
   })
   qualityReason: string | null;
 
   @ApiPropertyOptional({
-    example: { pagesCrawled: 4, totalWordCount: 2300 },
+    example: { pagesCrawled: 4, wordCount: 1800 },
     nullable: true,
   })
   crawlMetadata: Record<string, any> | null;

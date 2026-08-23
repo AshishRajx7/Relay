@@ -68,7 +68,7 @@ Relay Outreach Engine (TypeScript, NestJS, PostgreSQL, BullMQ, OpenAI)
   const pad = (n) => String(n).padStart(10, '0');
   // Exact 20-byte entries: 10 digits + ' ' + 5 digits + ' ' + char + ' \n' = 20 bytes
   const xref = Buffer.from(
-    `xref\n0 6\n0000000000 65535 f \r\n${pad(offset1)} 00000 n \r\n${pad(offset2)} 00000 n \r\n${pad(offset3)} 00000 n \r\n${pad(offset4)} 00000 n \r\n${pad(offset5)} 00000 n \r\n`,
+    `xref\n0 6\n0000000000 65535 f \n${pad(offset1)} 00000 n \n${pad(offset2)} 00000 n \n${pad(offset3)} 00000 n \n${pad(offset4)} 00000 n \n${pad(offset5)} 00000 n \n`,
     'ascii'
   );
 

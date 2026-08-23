@@ -101,7 +101,37 @@ export class OpenAIProvider implements IAIProvider {
     const model = this.defaultModel;
 
     if (!this.openai) {
-      // Mock structured response for local dev testing
+      if (request.feature === 'COMPANY_RESEARCH') {
+        const mockCompany: any = {
+          persona: 'SAAS',
+          industry: 'Cloud Infrastructure & Developer Tools',
+          companySize: '51-200',
+          summary: 'High-growth technology company building mission-critical modern infrastructure and developer tools.',
+          keywords: ['Cloud', 'Infrastructure', 'Developer Tools', 'B2B', 'APIs'],
+          techStack: ['TypeScript', 'NestJS', 'Go', 'Python', 'PostgreSQL', 'Redis', 'Kubernetes', 'AWS'],
+          products: ['Core Engine', 'Developer API', 'Enterprise Shield'],
+          targetDepartments: ['Engineering', 'Product', 'Platform Infrastructure'],
+          locations: ['San Francisco, CA', 'Remote US'],
+          outreachHooks: {
+            whyThisCompany: 'Market leader building high-throughput distributed infrastructure processing 50M+ requests daily.',
+            whyNow: 'Actively expanding distributed backend platform teams following Series B growth.',
+            keyProblemsSolving: ['Distributed consensus', 'High-throughput low-latency caching'],
+            engineeringCultureSignals: ['High ownership', 'Fast shipping cadence', 'Remote-first'],
+            recentMilestones: ['Launched v2 Core API', 'Expanded North American hiring'],
+          },
+        };
+        return {
+          data: mockCompany as T,
+          provider: 'openai-mock',
+          model,
+          promptTokens: 450,
+          completionTokens: 280,
+          totalTokens: 730,
+          latencyMs: Date.now() - startTime,
+        };
+      }
+
+      // Mock structured response for resume parsing
       const mockResult: any = {
         name: 'Alex Mercer',
         email: 'alex.mercer@example.com',

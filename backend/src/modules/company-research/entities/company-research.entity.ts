@@ -12,6 +12,14 @@ import { Company } from '../../companies/entities/company.entity';
 import { ResearchStatus } from '../enums/research-status.enum';
 import { CompanyPersona } from '../enums/company-persona.enum';
 
+export interface OutreachHooksJson {
+  whyThisCompany?: string;
+  whyNow?: string;
+  keyProblemsSolving?: string[];
+  engineeringCultureSignals?: string[];
+  recentMilestones?: string[];
+}
+
 @Entity('company_research')
 export class CompanyResearch {
   @PrimaryGeneratedColumn('uuid')
@@ -60,8 +68,34 @@ export class CompanyResearch {
   @Column({ type: 'jsonb', default: [] })
   products: string[];
 
-  @Column({ name: 'raw_markdown', type: 'text', nullable: true })
+  @Column({ name: 'raw_markdown', type: 'text', nullable: true, select: false })
   rawMarkdown: string | null;
+
+  @Column({ name: 'careers_page_url', length: 512, nullable: true })
+  careersPageUrl: string | null;
+
+  @Column({ name: 'ats_provider', length: 50, nullable: true })
+  @Index('IDX_company_research_ats_provider')
+  atsProvider: string | null;
+
+  @Column({ name: 'is_hiring', type: 'boolean', default: false })
+  @Index('IDX_company_research_is_hiring')
+  isHiring: boolean;
+
+  @Column({ name: 'hiring_signals', type: 'jsonb', default: [] })
+  hiringSignals: string[];
+
+  @Column({ name: 'generic_contact_emails', type: 'jsonb', default: [] })
+  genericContactEmails: string[];
+
+  @Column({ name: 'target_departments', type: 'jsonb', default: [] })
+  targetDepartments: string[];
+
+  @Column({ type: 'jsonb', default: [] })
+  locations: string[];
+
+  @Column({ name: 'outreach_hooks', type: 'jsonb', default: {} })
+  outreachHooks: OutreachHooksJson;
 
   @Column({ name: 'research_quality_score', type: 'smallint', nullable: true })
   researchQualityScore: number | null;

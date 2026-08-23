@@ -27,6 +27,12 @@ export interface AppConfig {
     type: string;
     localRoot: string;
   };
+  crawl4ai: {
+    url: string;
+    apiToken: string;
+    mock: boolean;
+    timeoutMs: number;
+  };
   upload: {
     maxFileSize: number;
   };
@@ -55,6 +61,11 @@ export const validationSchema = Joi.object({
 
   STORAGE_TYPE: Joi.string().valid('local', 's3').default('local'),
   STORAGE_LOCAL_ROOT: Joi.string().default('./uploads'),
+
+  CRAWL4AI_URL: Joi.string().default('http://localhost:11235'),
+  CRAWL4AI_API_TOKEN: Joi.string().default('relay_crawl_secret'),
+  CRAWL4AI_MOCK: Joi.boolean().default(false),
+  CRAWL4AI_TIMEOUT_MS: Joi.number().default(30000),
 
   UPLOAD_MAX_FILE_SIZE: Joi.number().default(10485760),
 });
@@ -85,6 +96,12 @@ export const configuration = (): AppConfig => ({
   storage: {
     type: process.env.STORAGE_TYPE || 'local',
     localRoot: process.env.STORAGE_LOCAL_ROOT || './uploads',
+  },
+  crawl4ai: {
+    url: process.env.CRAWL4AI_URL || 'http://localhost:11235',
+    apiToken: process.env.CRAWL4AI_API_TOKEN || 'relay_crawl_secret',
+    mock: process.env.CRAWL4AI_MOCK === 'true',
+    timeoutMs: parseInt(process.env.CRAWL4AI_TIMEOUT_MS || '30000', 10),
   },
   upload: {
     maxFileSize: parseInt(process.env.UPLOAD_MAX_FILE_SIZE || '10485760', 10),

@@ -22,6 +22,18 @@ services:
     volumes:
       - relay_redisdata:/data
 
+  crawl4ai:
+    image: unclecode/crawl4ai:latest
+    container_name: relay_crawl4ai
+    restart: unless-stopped
+    ports:
+      - "11235:11235"
+    environment:
+      - CRAWL4AI_API_TOKEN=relay_crawl_secret
+      - MAX_CONCURRENT_TASKS=5
+      - TIMEOUT=30
+    shm_size: "2gb"
+
 volumes:
   relay_pgdata:
   relay_redisdata:

@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, MoreThan } from 'typeorm';
+import { Repository, MoreThan, In } from 'typeorm';
 import { CompanyResearch } from './entities/company-research.entity';
 import { Company } from '../companies/entities/company.entity';
 import { ResearchStatus } from './enums/research-status.enum';
@@ -17,7 +17,7 @@ export class CompanyResearchService {
   ) {}
 
   /**
-   * Retrieves the most recent research record for a company.
+   * Retrieves the most recent research record for a company (excludes rawMarkdown by default).
    */
   async getLatest(companyId: string): Promise<CompanyResearch | null> {
     return await this.researchRepository
@@ -25,6 +25,30 @@ export class CompanyResearchService {
       .where('research.companyId = :companyId', { companyId })
       .orderBy('research.researchedAt', 'DESC', 'NULLS LAST')
       .addOrderBy('research.createdAt', 'DESC')
+      .getOne();
+  }
+
+  /**
+   * Explicit retrieval of the most recent research record including full rawMarkdown.
+   */
+  async getLatestWithMarkdown(companyId: string): Promise<CompanyResearch | null> {
+    return await this.researchRepository
+      .createQueryBuilder('research')
+      .addSelect('research.rawMarkdown')
+      .where('research.companyId = :companyId', { companyId })
+      .orderBy('research.researchedAt', 'DESC', 'NULLS LAST')
+      .addOrderBy('research.createdAt', 'DESC')
+      .getOne();
+  }
+
+  /**
+   * Explicit retrieval of a research record by ID including full rawMarkdown.
+   */
+  async getResearchWithMarkdown(id: string): Promise<CompanyResearch | null> {
+    return await this.researchRepository
+      .createQueryBuilder('research')
+      .addSelect('research.rawMarkdown')
+      .where('research.id = :id', { id })
       .getOne();
   }
 
@@ -52,12 +76,28 @@ export class CompanyResearchService {
   }
 
   /**
-   * Creates a new pending research record in database for a company.
+   * Creates or returns an active pending research record for a company (Idempotency safe).
    */
-  async createPendingResearch(companyId: string): Promise<CompanyResearch> {
+  async createPendingResearch(companyId: string, forceNew: boolean = false): Promise<CompanyResearch> {
     const company = await this.companyRepository.findOne({ where: { id: companyId } });
     if (!company) {
       throw new NotFoundException(`Company with ID "${companyId}" not found.`);
+    }
+
+    if (!forceNew) {
+      // Check if there is already an in-flight PENDING or PROCESSING research
+      const active = await this.researchRepository.findOne({
+        where: {
+          companyId,
+          status: In([ResearchStatus.PENDING, ResearchStatus.PROCESSING]),
+        },
+        order: { createdAt: 'DESC' },
+      });
+
+      if (active) {
+        this.logger.log(`Reusing active in-flight research ID: ${active.id} for company: ${company.name}`);
+        return active;
+      }
     }
 
     const research = this.researchRepository.create({
@@ -66,6 +106,11 @@ export class CompanyResearchService {
       keywords: [],
       techStack: [],
       products: [],
+      hiringSignals: [],
+      genericContactEmails: [],
+      targetDepartments: [],
+      locations: [],
+      outreachHooks: {},
     });
 
     const saved = await this.researchRepository.save(research);
@@ -110,6 +155,14 @@ export class CompanyResearchService {
     research.techStack = payload.techStack ?? [];
     research.products = payload.products ?? [];
     research.rawMarkdown = payload.rawMarkdown ?? null;
+    research.careersPageUrl = payload.careersPageUrl ?? null;
+    research.atsProvider = payload.atsProvider ?? null;
+    research.isHiring = payload.isHiring ?? false;
+    research.hiringSignals = payload.hiringSignals ?? [];
+    research.genericContactEmails = payload.genericContactEmails ?? [];
+    research.targetDepartments = payload.targetDepartments ?? [];
+    research.locations = payload.locations ?? [];
+    research.outreachHooks = payload.outreachHooks ?? {};
     research.researchQualityScore = payload.researchQualityScore ?? null;
     research.qualityReason = payload.qualityReason ?? null;
     research.crawlMetadata = payload.crawlMetadata ?? null;
@@ -118,7 +171,7 @@ export class CompanyResearchService {
     research.expiresAt = payload.expiresAt ?? thirtyDaysLater;
 
     const saved = await this.researchRepository.save(research);
-    this.logger.log(`Marked research ID: ${id} as COMPLETED (score: ${saved.researchQualityScore})`);
+    this.logger.log(`Marked research ID: ${id} as COMPLETED (score: ${saved.researchQualityScore}, isHiring: ${saved.isHiring})`);
     return saved;
   }
 
@@ -147,6 +200,14 @@ export class CompanyResearchService {
     research.techStack = payload?.techStack ?? [];
     research.products = payload?.products ?? [];
     research.rawMarkdown = payload?.rawMarkdown ?? null;
+    research.careersPageUrl = payload?.careersPageUrl ?? null;
+    research.atsProvider = payload?.atsProvider ?? null;
+    research.isHiring = payload?.isHiring ?? false;
+    research.hiringSignals = payload?.hiringSignals ?? [];
+    research.genericContactEmails = payload?.genericContactEmails ?? [];
+    research.targetDepartments = payload?.targetDepartments ?? [];
+    research.locations = payload?.locations ?? [];
+    research.outreachHooks = payload?.outreachHooks ?? {};
     research.crawlMetadata = payload?.crawlMetadata ?? null;
     research.researchedAt = now;
     research.expiresAt = thirtyDaysLater;
