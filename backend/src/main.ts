@@ -52,6 +52,7 @@ async function bootstrap() {
     .setTitle('Relay API')
     .setDescription('AI-Powered Cold Outreach Platform REST API')
     .setVersion('1.0')
+    .addTag('Company Research', 'Company website research lifecycle and scoring')
     .addTag('Contacts', 'Contact CSV upload and directory operations')
     .addTag('Companies', 'Company directory and research management')
     .addTag('Resumes', 'Resume library and parsing operations')

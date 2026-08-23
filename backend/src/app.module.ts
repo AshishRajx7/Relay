@@ -10,6 +10,7 @@ import { ResumeModule } from './modules/resume/resume.module';
 import { HealthModule } from './modules/health/health.module';
 import { CompaniesModule } from './modules/companies/companies.module';
 import { ContactsModule } from './modules/contacts/contacts.module';
+import { CompanyResearchModule } from './modules/company-research/company-research.module';
 
 @Module({
   imports: [
@@ -37,6 +38,7 @@ import { ContactsModule } from './modules/contacts/contacts.module';
     HealthModule,
     CompaniesModule,
     ContactsModule,
+    CompanyResearchModule,
   ],
 })
 export class AppModule {}
