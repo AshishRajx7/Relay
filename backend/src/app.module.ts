@@ -9,6 +9,7 @@ import { AIProviderModule } from './modules/ai-provider/ai-provider.module';
 import { ResumeModule } from './modules/resume/resume.module';
 import { HealthModule } from './modules/health/health.module';
 import { CompaniesModule } from './modules/companies/companies.module';
+import { ContactsModule } from './modules/contacts/contacts.module';
 
 @Module({
   imports: [
@@ -35,6 +36,7 @@ import { CompaniesModule } from './modules/companies/companies.module';
     ResumeModule,
     HealthModule,
     CompaniesModule,
+    ContactsModule,
   ],
 })
 export class AppModule {}

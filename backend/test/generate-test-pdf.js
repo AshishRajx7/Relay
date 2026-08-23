@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 
 function generateValidPdf(outputPath) {
-  // A clean, byte-exact standard PDF 1.4 document
+  const target = outputPath || path.join(__dirname, 'test-resume.pdf');
   const content = `Alex Mercer
 Email: alex.mercer@example.com | Phone: (555) 019-2834 | Location: San Francisco, CA
 LinkedIn: https://linkedin.com/in/alexmercer | GitHub: https://github.com/alexmercer
@@ -39,27 +39,6 @@ Relay Outreach Engine (TypeScript, NestJS, PostgreSQL, BullMQ, OpenAI)
 - Built high-performance cold outreach engine with automated AI research and email generation.
 `;
 
-  // Create PDF objects with accurate xref offsets
-  let pdf = '';
-  const offsets = [];
-
-  function addObj(objStr) {
-    offsets.push(Buffer.byteLength(pdf, 'utf8'));
-    pdf += objStr + '\n';
-  }
-
-  pdf += '%PDF-1.4\n';
-
-  // Obj 1: Catalog
-  addObj('1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj');
-
-  // Obj 2: Pages
-  addObj('2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj');
-
-  // Obj 3: Page
-  addObj('3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>\nendobj');
-
-  // Format text stream
   const lines = content.split('\n');
   let streamData = 'BT\n/F1 9 Tf\n12 TL\n50 740 Td\n';
   for (const line of lines) {
@@ -68,30 +47,55 @@ Relay Outreach Engine (TypeScript, NestJS, PostgreSQL, BullMQ, OpenAI)
   }
   streamData += 'ET';
 
-  const streamLen = Buffer.byteLength(streamData, 'utf8');
+  const streamBuffer = Buffer.from(streamData, 'ascii');
+  const streamLen = streamBuffer.length;
 
-  // Obj 4: Stream
-  addObj(`4 0 obj\n<< /Length ${streamLen} >>\nstream\n${streamData}\nendstream\nendobj`);
+  const header = Buffer.from('%PDF-1.4\n', 'ascii');
+  const obj1 = Buffer.from('1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n', 'ascii');
+  const obj2 = Buffer.from('2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n', 'ascii');
+  const obj3 = Buffer.from('3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>\nendobj\n', 'ascii');
+  const obj4Header = Buffer.from(`4 0 obj\n<< /Length ${streamLen} >>\nstream\n`, 'ascii');
+  const obj4Footer = Buffer.from('\nendstream\nendobj\n', 'ascii');
+  const obj5 = Buffer.from('5 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n', 'ascii');
 
-  // Obj 5: Font
-  addObj('5 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj');
+  const offset1 = header.length;
+  const offset2 = offset1 + obj1.length;
+  const offset3 = offset2 + obj2.length;
+  const offset4 = offset3 + obj3.length;
+  const offset5 = offset4 + obj4Header.length + streamLen + obj4Footer.length;
+  const xrefOffset = offset5 + obj5.length;
 
-  // Xref
-  const xrefOffset = Buffer.byteLength(pdf, 'utf8');
-  pdf += 'xref\n';
-  pdf += `0 ${offsets.length + 1}\n`;
-  pdf += '0000000000 65535 f \n';
-  for (const offset of offsets) {
-    pdf += String(offset).padStart(10, '0') + ' 00000 n \n';
-  }
+  const pad = (n) => String(n).padStart(10, '0');
+  // Exact 20-byte entries: 10 digits + ' ' + 5 digits + ' ' + char + ' \n' = 20 bytes
+  const xref = Buffer.from(
+    `xref\n0 6\n0000000000 65535 f \r\n${pad(offset1)} 00000 n \r\n${pad(offset2)} 00000 n \r\n${pad(offset3)} 00000 n \r\n${pad(offset4)} 00000 n \r\n${pad(offset5)} 00000 n \r\n`,
+    'ascii'
+  );
 
-  // Trailer
-  pdf += `trailer\n<< /Size ${offsets.length + 1} /Root 1 0 R >>\n`;
-  pdf += `startxref\n${xrefOffset}\n%%EOF\n`;
+  const trailer = Buffer.from(
+    `trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF\n`,
+    'ascii'
+  );
 
-  fs.writeFileSync(outputPath, pdf, 'utf8');
-  console.log(`Generated 100% valid PDF at: ${outputPath}`);
+  const totalBuffer = Buffer.concat([
+    header,
+    obj1,
+    obj2,
+    obj3,
+    obj4Header,
+    streamBuffer,
+    obj4Footer,
+    obj5,
+    xref,
+    trailer,
+  ]);
+
+  fs.writeFileSync(target, totalBuffer);
+  return target;
 }
 
-const targetPath = path.join(__dirname, 'test-resume.pdf');
-generateValidPdf(targetPath);
+module.exports = { generateValidPdf };
+
+if (require.main === module) {
+  generateValidPdf();
+}

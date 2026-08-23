@@ -1,0 +1,8 @@
+name,email,company,website
+John Doe,john.doe@techflow.io,TechFlow Systems,https://www.techflow.io
+Jane Smith,jane.smith@cloudscale.com,CloudScale Inc,https://cloudscale.com/about
+Bob Wilson,bob.wilson@techflow.io,TechFlow Systems,http://techflow.io
+Alice Johnson,invalid-email-format,Bad Email Corp,https://bademail.com
+Missing Company,missing@company.com,,https://missingcompany.com
+,noname@company.com,No Name Corp,https://noname.com
+Sarah Connor,sarah@cyberdyne.com,Cyberdyne Systems,https://cyberdyne.com

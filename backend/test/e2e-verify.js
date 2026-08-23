@@ -19,11 +19,18 @@ async function runVerification() {
   }
   console.log('   ✅ Health check PASSED\n');
 
+  // Clean existing resume records before testing
+  const initPg = new Client({ host: '127.0.0.1', port: 5432, user: 'relay', password: 'relay_dev_password', database: 'relay' });
+  await initPg.connect();
+  await initPg.query('DELETE FROM resume_file');
+  await initPg.end();
+
   // 2. Upload Resume PDF
   console.log('2️⃣  Testing Resume Upload (multipart/form-data)...');
-  const pdfPath = path.join(__dirname, 'test-resume.pdf');
+  const { generateValidPdf } = require('./generate-test-pdf');
+  const pdfPath = generateValidPdf();
   const fileBuffer = fs.readFileSync(pdfPath);
-  const blob = new Blob([fileBuffer], { type: 'application/pdf' });
+  const blob = new Blob([new Uint8Array(fileBuffer)], { type: 'application/pdf' });
 
   const formData = new FormData();
   formData.append('file', blob, 'test-resume.pdf');
@@ -75,8 +82,9 @@ async function runVerification() {
 
   // 4. Test Duplicate Upload (409 Conflict)
   console.log('4️⃣  Testing Duplicate Upload (same SHA-256 hash)...');
+  const dupBlob = new Blob([new Uint8Array(fileBuffer)], { type: 'application/pdf' });
   const dupFormData = new FormData();
-  dupFormData.append('file', blob, 'test-resume.pdf');
+  dupFormData.append('file', dupBlob, 'test-resume.pdf');
   const dupRes = await fetch(`${BASE_URL}/resumes/upload`, {
     method: 'POST',
     body: dupFormData,
