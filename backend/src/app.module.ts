@@ -8,6 +8,7 @@ import { StorageModule } from './modules/storage/storage.module';
 import { AIProviderModule } from './modules/ai-provider/ai-provider.module';
 import { ResumeModule } from './modules/resume/resume.module';
 import { HealthModule } from './modules/health/health.module';
+import { CompaniesModule } from './modules/companies/companies.module';
 
 @Module({
   imports: [
@@ -33,6 +34,7 @@ import { HealthModule } from './modules/health/health.module';
     AIProviderModule,
     ResumeModule,
     HealthModule,
+    CompaniesModule,
   ],
 })
 export class AppModule {}

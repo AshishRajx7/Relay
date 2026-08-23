@@ -6,6 +6,8 @@ import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
   const app = await NestFactory.create(AppModule);
@@ -45,8 +47,21 @@ async function bootstrap() {
   // Global logging interceptor
   app.useGlobalInterceptors(new LoggingInterceptor());
 
+  // Swagger Documentation
+  const swaggerConfig = new DocumentBuilder()
+    .setTitle('Relay API')
+    .setDescription('AI-Powered Cold Outreach Platform REST API')
+    .setVersion('1.0')
+    .addTag('Companies', 'Company directory and research management')
+    .addTag('Resumes', 'Resume library and parsing operations')
+    .build();
+
+  const swaggerDocument = SwaggerModule.createDocument(app, swaggerConfig);
+  SwaggerModule.setup('api/docs', app, swaggerDocument);
+
   await app.listen(port, '0.0.0.0');
   logger.log(`🚀 Relay Backend API is running on: http://localhost:${port}/${apiPrefix}`);
+  logger.log(`📚 Swagger Documentation at: http://localhost:${port}/api/docs`);
   logger.log(`🩺 Health check available at: http://localhost:${port}/${apiPrefix}/health`);
 }
 
