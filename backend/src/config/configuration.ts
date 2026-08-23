@@ -1,0 +1,92 @@
+import * as Joi from 'joi';
+
+export interface AppConfig {
+  nodeEnv: string;
+  port: number;
+  apiPrefix: string;
+  database: {
+    host: string;
+    port: number;
+    username: string;
+    password: string;
+    database: string;
+    synchronize: boolean;
+    logging: boolean;
+  };
+  redis: {
+    host: string;
+    port: number;
+  };
+  openai: {
+    apiKey: string;
+    model: string;
+    maxTokens: number;
+    temperature: number;
+  };
+  storage: {
+    type: string;
+    localRoot: string;
+  };
+  upload: {
+    maxFileSize: number;
+  };
+}
+
+export const validationSchema = Joi.object({
+  NODE_ENV: Joi.string().valid('development', 'production', 'test').default('development'),
+  PORT: Joi.number().default(3000),
+  API_PREFIX: Joi.string().default('api/v1'),
+
+  DB_HOST: Joi.string().required(),
+  DB_PORT: Joi.number().default(5432),
+  DB_USERNAME: Joi.string().required(),
+  DB_PASSWORD: Joi.string().required(),
+  DB_DATABASE: Joi.string().required(),
+  DB_SYNCHRONIZE: Joi.boolean().default(false),
+  DB_LOGGING: Joi.boolean().default(true),
+
+  REDIS_HOST: Joi.string().default('localhost'),
+  REDIS_PORT: Joi.number().default(6379),
+
+  OPENAI_API_KEY: Joi.string().default('sk-placeholder-for-dev'),
+  OPENAI_MODEL: Joi.string().default('gpt-4o'),
+  OPENAI_MAX_TOKENS: Joi.number().default(4096),
+  OPENAI_TEMPERATURE: Joi.number().default(0.3),
+
+  STORAGE_TYPE: Joi.string().valid('local', 's3').default('local'),
+  STORAGE_LOCAL_ROOT: Joi.string().default('./uploads'),
+
+  UPLOAD_MAX_FILE_SIZE: Joi.number().default(10485760),
+});
+
+export const configuration = (): AppConfig => ({
+  nodeEnv: process.env.NODE_ENV || 'development',
+  port: parseInt(process.env.PORT || '3000', 10),
+  apiPrefix: process.env.API_PREFIX || 'api/v1',
+  database: {
+    host: process.env.DB_HOST || 'localhost',
+    port: parseInt(process.env.DB_PORT || '5432', 10),
+    username: process.env.DB_USERNAME || 'relay',
+    password: process.env.DB_PASSWORD || 'relay_dev_password',
+    database: process.env.DB_DATABASE || 'relay',
+    synchronize: process.env.DB_SYNCHRONIZE === 'true',
+    logging: process.env.DB_LOGGING === 'true',
+  },
+  redis: {
+    host: process.env.REDIS_HOST || 'localhost',
+    port: parseInt(process.env.REDIS_PORT || '6379', 10),
+  },
+  openai: {
+    apiKey: process.env.OPENAI_API_KEY || 'sk-placeholder-for-dev',
+    model: process.env.OPENAI_MODEL || 'gpt-4o',
+    maxTokens: parseInt(process.env.OPENAI_MAX_TOKENS || '4096', 10),
+    temperature: parseFloat(process.env.OPENAI_TEMPERATURE || '0.3'),
+  },
+  storage: {
+    type: process.env.STORAGE_TYPE || 'local',
+    localRoot: process.env.STORAGE_LOCAL_ROOT || './uploads',
+  },
+  upload: {
+    maxFileSize: parseInt(process.env.UPLOAD_MAX_FILE_SIZE || '10485760', 10),
+  },
+});
