@@ -1,0 +1,8 @@
+export enum DraftStatus {
+  PENDING = 'PENDING',
+  GENERATING = 'GENERATING',
+  GENERATED = 'GENERATED',
+  APPROVED = 'APPROVED',
+  REJECTED = 'REJECTED',
+  SENT = 'SENT',
+}

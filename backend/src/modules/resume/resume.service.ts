@@ -211,6 +211,7 @@ export class ResumeService {
         education: resume.profile.education,
         projects: resume.profile.projects,
         certifications: resume.profile.certifications,
+        achievements: resume.profile.achievements || [],
         links: resume.profile.links,
         parsedAt: resume.profile.parsedAt,
       };

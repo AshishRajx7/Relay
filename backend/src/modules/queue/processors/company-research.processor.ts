@@ -1,13 +1,16 @@
 import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Logger, Inject } from '@nestjs/common';
 import { Job } from 'bullmq';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import {
   QUEUE_COMPANY_RESEARCH,
   JOB_RESEARCH_COMPANY,
   CRAWL_PROVIDER_TOKEN,
 } from '../../../common/constants/app.constants';
-import { CompanyResearchJobData } from '../dto/company-research-job.dto';
 import { CompanyResearchService } from '../../company-research/company-research.service';
+import { CompanyProfileService } from '../../company-research/services/company-profile.service';
+import { Campaign } from '../../campaigns/entities/campaign.entity';
 import { ICrawlProvider } from '../../company-research/providers/crawl-provider.interface';
 import { AtsDiscoveryService } from '../../company-research/services/ats-discovery.service';
 import { ResearchQualityScorerService } from '../../company-research/services/research-quality-scorer.service';
@@ -39,6 +42,9 @@ export class CompanyResearchProcessor extends WorkerHost {
 
   constructor(
     private readonly researchService: CompanyResearchService,
+    private readonly companyProfileService: CompanyProfileService,
+    @InjectRepository(Campaign)
+    private readonly campaignRepository: Repository<Campaign>,
     @Inject(CRAWL_PROVIDER_TOKEN)
     private readonly crawlProvider: ICrawlProvider,
     private readonly atsDiscoveryService: AtsDiscoveryService,
@@ -48,12 +54,32 @@ export class CompanyResearchProcessor extends WorkerHost {
     super();
   }
 
-  async process(job: Job<CompanyResearchJobData, any, string>): Promise<any> {
-    this.logger.log(`[CompanyResearchProcessor] Processing BullMQ job ${job.id} for research ID: ${job.data.researchId} (${job.data.website})`);
+  async process(job: Job<any, any, string>): Promise<any> {
+    this.logger.log(`[CompanyResearchProcessor] Processing BullMQ job ${job.id} (name: ${job.name})`);
 
     if (job.name !== JOB_RESEARCH_COMPANY) {
       this.logger.warn(`Unknown job name in ${QUEUE_COMPANY_RESEARCH}: ${job.name}`);
       return null;
+    }
+
+    // Phase 2 & 3: Domain-based company profile intelligence
+    if (job.data.domain) {
+      const { domain, companyName, campaignId } = job.data;
+      this.logger.log(`[CompanyResearchProcessor] Executing intelligence for domain: ${domain}`);
+      const profile = await this.companyProfileService.researchAndSaveCompany(domain, companyName);
+
+      // Track campaign cost metrics if campaignId provided
+      if (campaignId) {
+        await this.campaignRepository.increment({ id: campaignId }, 'crawlCount', 1);
+        await this.campaignRepository.increment({ id: campaignId }, 'llmCalls', 1);
+        await this.campaignRepository.createQueryBuilder()
+          .update(Campaign)
+          .set({ estimatedCostUsd: () => 'estimated_cost_usd + 0.0020' })
+          .where('id = :id', { id: campaignId })
+          .execute();
+      }
+
+      return { profileId: profile.id, domain: profile.domain, companyName: profile.companyName };
     }
 
     const { researchId, companyId, website } = job.data;
@@ -72,7 +98,7 @@ export class CompanyResearchProcessor extends WorkerHost {
         crawlResult.markdown,
       );
 
-      // 4. Extract structured intelligence with AI (optimized for future cold outreach)
+      // 4. Extract structured intelligence with AI
       const systemPrompt = `You are a Principal Technical Researcher analyzing company websites to prepare high-conviction job outreach and applications.
 Extract structured company intelligence from the website markdown below.
 

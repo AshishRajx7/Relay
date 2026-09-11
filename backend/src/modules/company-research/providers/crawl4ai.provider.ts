@@ -64,12 +64,20 @@ export class Crawl4AIProvider implements ICrawlProvider {
       const data = await response.json();
       const result = Array.isArray(data) ? data[0] : (data.results ? data.results[0] : data);
 
-      if (!result || !result.markdown) {
-        throw new Error('Crawl4AI returned empty result or missing markdown');
+      let markdown = '';
+      if (typeof result.markdown === 'string') {
+        markdown = result.markdown;
+      } else if (result.markdown && typeof result.markdown === 'object') {
+        markdown = result.markdown.raw_markdown || result.markdown.fit_markdown || '';
+      }
+      if (!markdown && typeof result.raw_markdown === 'string') {
+        markdown = result.raw_markdown;
+      }
+      if (!markdown && typeof result.fit_markdown === 'string') {
+        markdown = result.fit_markdown;
       }
 
-      const markdown = result.markdown || '';
-      const htmlLinks = result.links || (result.metadata?.links || []);
+      const htmlLinks = Array.isArray(result.links) ? result.links : (result.metadata?.links || []);
       const wordCount = markdown.split(/\s+/).filter(Boolean).length;
 
       return {

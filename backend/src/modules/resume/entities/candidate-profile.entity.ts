@@ -16,7 +16,10 @@ export interface SkillsJson {
   databases: string[];
   tools: string[];
   other: string[];
+  patterns?: string[];
 }
+
+export type ExperienceType = 'FULL_TIME' | 'INTERNSHIP' | 'FOUNDER' | 'FREELANCE' | 'CONTRACT' | 'PART_TIME';
 
 export interface ExperienceJson {
   company: string;
@@ -24,6 +27,9 @@ export interface ExperienceJson {
   location?: string | null;
   startDate: string;
   endDate: string;
+  experienceType?: ExperienceType;
+  isFounder?: boolean;
+  founderType?: 'FOUNDER' | 'CO_FOUNDER' | 'FOUNDING_ENGINEER' | null;
   highlights: string[];
 }
 
@@ -31,6 +37,8 @@ export interface EducationJson {
   institution: string;
   degree: string;
   field: string;
+  startYear?: number | null;
+  endYear?: number | null;
   graduationDate?: string | null;
   gpa?: string | null;
 }
@@ -86,7 +94,7 @@ export class CandidateProfile {
 
   @Column({
     type: 'jsonb',
-    default: { languages: [], frameworks: [], databases: [], tools: [], other: [] },
+    default: { languages: [], frameworks: [], databases: [], tools: [], other: [], patterns: [] },
   })
   skills: SkillsJson;
 
@@ -101,6 +109,9 @@ export class CandidateProfile {
 
   @Column({ type: 'jsonb', default: [] })
   certifications: string[];
+
+  @Column({ type: 'jsonb', default: [] })
+  achievements: string[];
 
   @Column({ type: 'jsonb', default: { linkedin: null, github: null, portfolio: null } })
   links: LinksJson;

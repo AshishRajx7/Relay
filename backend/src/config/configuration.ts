@@ -17,8 +17,10 @@ export interface AppConfig {
     host: string;
     port: number;
   };
-  openai: {
+  ai: {
+    provider: string;
     apiKey: string;
+    baseUrl: string;
     model: string;
     maxTokens: number;
     temperature: number;
@@ -54,10 +56,18 @@ export const validationSchema = Joi.object({
   REDIS_HOST: Joi.string().default('localhost'),
   REDIS_PORT: Joi.number().default(6379),
 
-  OPENAI_API_KEY: Joi.string().default('sk-placeholder-for-dev'),
-  OPENAI_MODEL: Joi.string().default('gpt-4o'),
-  OPENAI_MAX_TOKENS: Joi.number().default(4096),
-  OPENAI_TEMPERATURE: Joi.number().default(0.3),
+  AI_PROVIDER: Joi.string().default('nvidia'),
+  AI_API_KEY: Joi.string().allow('').optional(),
+  AI_BASE_URL: Joi.string().default('https://integrate.api.nvidia.com/v1'),
+  AI_MODEL: Joi.string().default('deepseek-ai/deepseek-v4-flash-0731'),
+  AI_MAX_TOKENS: Joi.number().default(4096),
+  AI_TEMPERATURE: Joi.number().default(0.3),
+
+  // Backwards compatibility fallbacks
+  OPENAI_API_KEY: Joi.string().allow('').optional(),
+  OPENAI_MODEL: Joi.string().optional(),
+  OPENAI_MAX_TOKENS: Joi.number().optional(),
+  OPENAI_TEMPERATURE: Joi.number().optional(),
 
   STORAGE_TYPE: Joi.string().valid('local', 's3').default('local'),
   STORAGE_LOCAL_ROOT: Joi.string().default('./uploads'),
@@ -68,6 +78,16 @@ export const validationSchema = Joi.object({
   CRAWL4AI_TIMEOUT_MS: Joi.number().default(30000),
 
   UPLOAD_MAX_FILE_SIZE: Joi.number().default(10485760),
+
+  // Google / Gmail OAuth Credentials
+  GOOGLE_CLIENT_ID: Joi.string().allow('').optional(),
+  GOOGLE_CLIENT_SECRET: Joi.string().allow('').optional(),
+  GOOGLE_REFRESH_TOKEN: Joi.string().allow('').optional(),
+  GOOGLE_REDIRECT_URI: Joi.string().allow('').optional(),
+  GMAIL_CLIENT_ID: Joi.string().allow('').optional(),
+  GMAIL_CLIENT_SECRET: Joi.string().allow('').optional(),
+  GMAIL_REFRESH_TOKEN: Joi.string().allow('').optional(),
+  GMAIL_REDIRECT_URI: Joi.string().allow('').optional(),
 });
 
 export const configuration = (): AppConfig => ({
@@ -87,11 +107,13 @@ export const configuration = (): AppConfig => ({
     host: process.env.REDIS_HOST || 'localhost',
     port: parseInt(process.env.REDIS_PORT || '6379', 10),
   },
-  openai: {
-    apiKey: process.env.OPENAI_API_KEY || 'sk-placeholder-for-dev',
-    model: process.env.OPENAI_MODEL || 'gpt-4o',
-    maxTokens: parseInt(process.env.OPENAI_MAX_TOKENS || '4096', 10),
-    temperature: parseFloat(process.env.OPENAI_TEMPERATURE || '0.3'),
+  ai: {
+    provider: process.env.AI_PROVIDER || 'nvidia',
+    apiKey: process.env.AI_API_KEY || process.env.OPENAI_API_KEY || '',
+    baseUrl: process.env.AI_BASE_URL || 'https://integrate.api.nvidia.com/v1',
+    model: process.env.AI_MODEL || process.env.OPENAI_MODEL || 'deepseek-ai/deepseek-v4-flash-0731',
+    maxTokens: parseInt(process.env.AI_MAX_TOKENS || process.env.OPENAI_MAX_TOKENS || '4096', 10),
+    temperature: parseFloat(process.env.AI_TEMPERATURE || process.env.OPENAI_TEMPERATURE || '0.3'),
   },
   storage: {
     type: process.env.STORAGE_TYPE || 'local',

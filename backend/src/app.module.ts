@@ -11,6 +11,10 @@ import { HealthModule } from './modules/health/health.module';
 import { CompaniesModule } from './modules/companies/companies.module';
 import { ContactsModule } from './modules/contacts/contacts.module';
 import { CompanyResearchModule } from './modules/company-research/company-research.module';
+import { OutreachModule } from './modules/outreach/outreach.module';
+import { CampaignsModule } from './modules/campaigns/campaigns.module';
+import { ProspectsModule } from './modules/prospects/prospects.module';
+import { GmailModule } from './modules/gmail/gmail.module';
 
 @Module({
   imports: [
@@ -39,6 +43,10 @@ import { CompanyResearchModule } from './modules/company-research/company-resear
     CompaniesModule,
     ContactsModule,
     CompanyResearchModule,
+    OutreachModule,
+    CampaignsModule,
+    ProspectsModule,
+    GmailModule,
   ],
 })
 export class AppModule {}

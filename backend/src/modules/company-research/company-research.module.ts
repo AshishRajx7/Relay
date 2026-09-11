@@ -3,7 +3,12 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { BullModule } from '@nestjs/bullmq';
 import { CompanyResearch } from './entities/company-research.entity';
 import { Company } from '../companies/entities/company.entity';
+import { CompanyProfile } from './entities/company-profile.entity';
+import { Prospect } from '../prospects/entities/prospect.entity';
+import { Campaign } from '../campaigns/entities/campaign.entity';
 import { CompanyResearchService } from './company-research.service';
+import { CompanyProfileService } from './services/company-profile.service';
+import { CompanyDomainService } from './services/company-domain.service';
 import { CompanyResearchController } from './company-research.controller';
 import { Crawl4AIProvider } from './providers/crawl4ai.provider';
 import { AtsDiscoveryService } from './services/ats-discovery.service';
@@ -13,7 +18,13 @@ import { QUEUE_COMPANY_RESEARCH, CRAWL_PROVIDER_TOKEN } from '../../common/const
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([CompanyResearch, Company]),
+    TypeOrmModule.forFeature([
+      CompanyResearch,
+      Company,
+      CompanyProfile,
+      Prospect,
+      Campaign,
+    ]),
     BullModule.registerQueue({
       name: QUEUE_COMPANY_RESEARCH,
     }),
@@ -21,6 +32,8 @@ import { QUEUE_COMPANY_RESEARCH, CRAWL_PROVIDER_TOKEN } from '../../common/const
   controllers: [CompanyResearchController],
   providers: [
     CompanyResearchService,
+    CompanyProfileService,
+    CompanyDomainService,
     AtsDiscoveryService,
     ResearchQualityScorerService,
     {
@@ -31,6 +44,8 @@ import { QUEUE_COMPANY_RESEARCH, CRAWL_PROVIDER_TOKEN } from '../../common/const
   ],
   exports: [
     CompanyResearchService,
+    CompanyProfileService,
+    CompanyDomainService,
     AtsDiscoveryService,
     ResearchQualityScorerService,
     CRAWL_PROVIDER_TOKEN,

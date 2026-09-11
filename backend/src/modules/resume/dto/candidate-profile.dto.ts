@@ -19,6 +19,7 @@ export class CandidateProfileDto {
   education: EducationJson[];
   projects: ProjectJson[];
   certifications: string[];
+  achievements: string[];
   links: LinksJson;
   parsedAt: Date;
 }
