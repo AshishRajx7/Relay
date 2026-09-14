@@ -1,16 +1,19 @@
-import { Processor, WorkerHost } from '@nestjs/bullmq';
+import { Processor, WorkerHost, InjectQueue } from '@nestjs/bullmq';
 import { Logger, Inject } from '@nestjs/common';
-import { Job } from 'bullmq';
+import { Job, Queue } from 'bullmq';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import {
   QUEUE_COMPANY_RESEARCH,
   JOB_RESEARCH_COMPANY,
+  QUEUE_DRAFT_GENERATION,
+  JOB_GENERATE_DRAFTS,
   CRAWL_PROVIDER_TOKEN,
 } from '../../../common/constants/app.constants';
 import { CompanyResearchService } from '../../company-research/company-research.service';
 import { CompanyProfileService } from '../../company-research/services/company-profile.service';
 import { Campaign } from '../../campaigns/entities/campaign.entity';
+import { Prospect, ProspectResearchStatus } from '../../prospects/entities/prospect.entity';
 import { ICrawlProvider } from '../../company-research/providers/crawl-provider.interface';
 import { AtsDiscoveryService } from '../../company-research/services/ats-discovery.service';
 import { ResearchQualityScorerService } from '../../company-research/services/research-quality-scorer.service';
@@ -45,6 +48,10 @@ export class CompanyResearchProcessor extends WorkerHost {
     private readonly companyProfileService: CompanyProfileService,
     @InjectRepository(Campaign)
     private readonly campaignRepository: Repository<Campaign>,
+    @InjectRepository(Prospect)
+    private readonly prospectRepository: Repository<Prospect>,
+    @InjectQueue(QUEUE_DRAFT_GENERATION)
+    private readonly draftQueue: Queue,
     @Inject(CRAWL_PROVIDER_TOKEN)
     private readonly crawlProvider: ICrawlProvider,
     private readonly atsDiscoveryService: AtsDiscoveryService,
@@ -66,7 +73,24 @@ export class CompanyResearchProcessor extends WorkerHost {
     if (job.data.domain) {
       const { domain, companyName, campaignId } = job.data;
       this.logger.log(`[CompanyResearchProcessor] Executing intelligence for domain: ${domain}`);
-      const profile = await this.companyProfileService.researchAndSaveCompany(domain, companyName);
+      
+      let profile;
+      try {
+        profile = await this.companyProfileService.researchAndSaveCompany(domain, companyName);
+      } catch (err: any) {
+        this.logger.error(`[CompanyResearchProcessor] Failed research for domain "${domain}": ${err.message}`, err.stack);
+        // If on last attempt, mark pending prospects for this domain as FAILED so campaign does not stall
+        if (job.attemptsMade >= (job.opts?.attempts || 3) - 1) {
+          await this.prospectRepository.update(
+            { domain, researchStatus: ProspectResearchStatus.PENDING },
+            { researchStatus: ProspectResearchStatus.FAILED, error: err.message },
+          );
+          if (campaignId) {
+            await this.checkAndTriggerDraftGeneration(campaignId);
+          }
+        }
+        throw err;
+      }
 
       // Track campaign cost metrics if campaignId provided
       if (campaignId) {
@@ -77,6 +101,21 @@ export class CompanyResearchProcessor extends WorkerHost {
           .set({ estimatedCostUsd: () => 'estimated_cost_usd + 0.0020' })
           .where('id = :id', { id: campaignId })
           .execute();
+      }
+
+      // Find all affected campaigns for prospects with this domain
+      const affectedProspects = await this.prospectRepository.find({
+        where: { domain: profile.domain },
+        select: ['campaignId'],
+      });
+      const campaignIds = Array.from(
+        new Set(
+          [campaignId, ...affectedProspects.map((p) => p.campaignId)].filter(Boolean) as string[],
+        ),
+      );
+
+      for (const cId of campaignIds) {
+        await this.checkAndTriggerDraftGeneration(cId);
       }
 
       return { profileId: profile.id, domain: profile.domain, companyName: profile.companyName };
@@ -213,4 +252,60 @@ Return a JSON object conforming to this exact JSON schema:
       throw err;
     }
   }
+
+  /**
+   * Checks if all prospects in a campaign have finished company research.
+   * If all completed, auto-enqueues JOB_GENERATE_DRAFTS with deterministic jobId (exactly once).
+   */
+  public async checkAndTriggerDraftGeneration(campaignId: string): Promise<boolean> {
+    const campaign = await this.campaignRepository.findOne({ where: { id: campaignId } });
+    if (!campaign) return false;
+
+    // Check if any prospects in this campaign are still pending or researching
+    const pendingCount = await this.prospectRepository.count({
+      where: [
+        { campaignId, researchStatus: ProspectResearchStatus.PENDING },
+        { campaignId, researchStatus: ProspectResearchStatus.RESEARCHING },
+      ],
+    });
+
+    if (pendingCount > 0) {
+      this.logger.log(
+        `Campaign "${campaign.name}" (${campaignId}) has ${pendingCount} prospects still awaiting research.`
+      );
+      return false;
+    }
+
+    // All research complete! Check if there are eligible researched/manual-review prospects
+    const eligibleCount = await this.prospectRepository.count({
+      where: [
+        { campaignId, researchStatus: ProspectResearchStatus.RESEARCHED },
+        { campaignId, researchStatus: ProspectResearchStatus.MANUAL_REVIEW },
+      ],
+    });
+
+    if (eligibleCount === 0) {
+      this.logger.warn(`Campaign "${campaign.name}" (${campaignId}) has no eligible prospects for draft generation.`);
+      return false;
+    }
+
+    const jobId = `campaign-drafts-${campaignId}`;
+    this.logger.log(
+      `All prospects in campaign "${campaign.name}" completed research (${eligibleCount} eligible). Auto-chaining to draft generation (Job ID: ${jobId})...`
+    );
+
+    await this.draftQueue.add(
+      JOB_GENERATE_DRAFTS,
+      { campaignId },
+      {
+        jobId,
+        attempts: 3,
+        backoff: { type: 'exponential', delay: 3000 },
+        removeOnComplete: true,
+      },
+    );
+
+    return true;
+  }
 }
+

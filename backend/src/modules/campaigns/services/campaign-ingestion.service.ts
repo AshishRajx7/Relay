@@ -17,7 +17,12 @@ import { CompanyProfile } from '../../company-research/entities/company-profile.
 import { CompanyProfileService } from '../../company-research/services/company-profile.service';
 import { CompanyDomainService } from '../../company-research/services/company-domain.service';
 import { ContactIntelligenceService } from '../../outreach/services/contact-intelligence.service';
-import { QUEUE_COMPANY_RESEARCH, JOB_RESEARCH_COMPANY } from '../../../common/constants/app.constants';
+import {
+  QUEUE_COMPANY_RESEARCH,
+  JOB_RESEARCH_COMPANY,
+  QUEUE_DRAFT_GENERATION,
+  JOB_GENERATE_DRAFTS,
+} from '../../../common/constants/app.constants';
 
 export interface IngestionResult {
   campaignId: string;
@@ -48,6 +53,8 @@ export class CampaignIngestionService {
     private readonly contactIntelligenceService: ContactIntelligenceService,
     @InjectQueue(QUEUE_COMPANY_RESEARCH)
     private readonly researchQueue: Queue,
+    @InjectQueue(QUEUE_DRAFT_GENERATION)
+    private readonly draftQueue: Queue,
   ) {}
 
   /**
@@ -221,9 +228,7 @@ export class CampaignIngestionService {
           cachedCount++;
           prospect.companyProfileId = cachedProfile.id;
           prospect.companyName = cachedProfile.companyName;
-          prospect.researchStatus = cachedProfile.researchScore < 40
-            ? ProspectResearchStatus.MANUAL_REVIEW
-            : ProspectResearchStatus.RESEARCHED;
+          prospect.researchStatus = ProspectResearchStatus.RESEARCHED;
         } else {
           prospect.researchStatus = ProspectResearchStatus.PENDING;
           domainsToResearch.add(normalizedDomain);
@@ -269,6 +274,11 @@ export class CampaignIngestionService {
       `Unsupported: ${unsupportedCount} | Duplicates: ${totalDuplicates}`
     );
 
+    // If no new domains needed research (all cached), immediately auto-chain to draft generation
+    if (queuedForResearch === 0 && uniqueBatch.size > 0) {
+      await this.checkAndTriggerDraftGeneration(campaign.id);
+    }
+
     return {
       campaignId: campaign.id,
       totalParsed: items.length,
@@ -281,4 +291,54 @@ export class CampaignIngestionService {
       queuedForResearch,
     };
   }
+
+  /**
+   * Checks if all prospects in a campaign have completed research, and if so,
+   * enqueues JOB_GENERATE_DRAFTS with a deterministic jobId (exactly once).
+   */
+  public async checkAndTriggerDraftGeneration(campaignId: string): Promise<boolean> {
+    const campaign = await this.campaignRepository.findOne({ where: { id: campaignId } });
+    if (!campaign) return false;
+
+    const pendingCount = await this.prospectRepository.count({
+      where: [
+        { campaignId, researchStatus: ProspectResearchStatus.PENDING },
+        { campaignId, researchStatus: ProspectResearchStatus.RESEARCHING },
+      ],
+    });
+
+    if (pendingCount > 0) {
+      return false;
+    }
+
+    const eligibleCount = await this.prospectRepository.count({
+      where: [
+        { campaignId, researchStatus: ProspectResearchStatus.RESEARCHED },
+        { campaignId, researchStatus: ProspectResearchStatus.MANUAL_REVIEW },
+      ],
+    });
+
+    if (eligibleCount === 0) {
+      return false;
+    }
+
+    const jobId = `campaign-drafts-${campaignId}`;
+    this.logger.log(
+      `[CampaignIngestionService] All prospects in campaign "${campaign.name}" finished research. Auto-chaining to draft generation (Job ID: ${jobId})...`
+    );
+
+    await this.draftQueue.add(
+      JOB_GENERATE_DRAFTS,
+      { campaignId },
+      {
+        jobId,
+        attempts: 3,
+        backoff: { type: 'exponential', delay: 3000 },
+        removeOnComplete: true,
+      },
+    );
+
+    return true;
+  }
 }
+

@@ -14,8 +14,9 @@ import { DraftQuality } from './entities/draft-quality.entity';
 import { EmailDraftVariant, EmailVariantType } from './entities/email-draft-variant.entity';
 import { Prospect, ProspectResearchStatus, ProspectDraftStatus } from '../prospects/entities/prospect.entity';
 import { Campaign } from '../campaigns/entities/campaign.entity';
-import { GmailDraftService, GmailDraftResult } from './services/gmail-draft.service';
+import { GmailDraftService, GmailDraftResult, EmailAttachment } from './services/gmail-draft.service';
 import { EmailGenerationService } from './services/email-generation.service';
+import { StorageService } from '../storage/storage.service';
 import {
   QUEUE_DRAFT_GENERATION,
   JOB_GENERATE_DRAFT,
@@ -47,6 +48,7 @@ export class OutreachService {
     private readonly campaignRepository: Repository<Campaign>,
     private readonly gmailDraftService: GmailDraftService,
     private readonly emailGenerationService: EmailGenerationService,
+    private readonly storageService: StorageService,
     @InjectQueue(QUEUE_DRAFT_GENERATION)
     private readonly draftQueue: Queue,
     @InjectQueue(QUEUE_GMAIL_DRAFT)
@@ -63,10 +65,10 @@ export class OutreachService {
     }
 
     const prospects = await this.prospectRepository.find({
-      where: {
-        campaignId,
-        researchStatus: ProspectResearchStatus.RESEARCHED,
-      },
+      where: [
+        { campaignId, researchStatus: ProspectResearchStatus.RESEARCHED },
+        { campaignId, researchStatus: ProspectResearchStatus.MANUAL_REVIEW },
+      ],
     });
 
     let queuedCount = 0;
@@ -116,7 +118,16 @@ export class OutreachService {
   async findDraftById(id: string): Promise<EmailDraft> {
     const draft = await this.emailDraftRepository.findOne({
       where: { id },
-      relations: ['prospect', 'prospect.companyProfile', 'prospect.campaign', 'reasoning', 'quality', 'variants'],
+      relations: [
+        'prospect',
+        'prospect.companyProfile',
+        'prospect.campaign',
+        'prospect.campaign.candidateProfile',
+        'prospect.campaign.candidateProfile.resumeFile',
+        'reasoning',
+        'quality',
+        'variants',
+      ],
     });
 
     if (!draft) {
@@ -239,13 +250,38 @@ export class OutreachService {
       );
     }
 
-    const candidateProfileId = draft.prospect.campaign?.candidateProfileId;
+    const candidateProfile = draft.prospect.campaign?.candidateProfile;
+    const resumeFile = candidateProfile?.resumeFile;
+    let attachment: EmailAttachment | undefined;
+
+    if (resumeFile?.storagePath) {
+      try {
+        const fileBuffer = await this.storageService.readFile(resumeFile.storagePath);
+        const candidateName = candidateProfile?.name?.trim() || 'Candidate';
+        const sanitizedFilename = `Resume - ${candidateName.replace(/[^a-zA-Z0-9 _-]/g, '')}.pdf`;
+        attachment = {
+          filename: sanitizedFilename,
+          content: fileBuffer,
+          contentType: 'application/pdf',
+        };
+        this.logger.log(
+          `Attached resume PDF "${sanitizedFilename}" (${fileBuffer.length} bytes) to draft for ${draft.prospect.email}`,
+        );
+      } catch (fileErr: any) {
+        this.logger.warn(
+          `Could not read resume file from storage (${resumeFile.storagePath}): ${fileErr.message}. Creating draft without attachment.`,
+        );
+      }
+    }
+
+    const candidateProfileId = candidateProfile?.id;
     const result = await this.gmailDraftService.createDraft(
       draft.id,
       draft.prospect.email,
       draft.subject,
       draft.body,
       candidateProfileId,
+      attachment,
     );
 
     draft.gmailDraftId = result.gmailDraftId;
@@ -266,4 +302,79 @@ export class OutreachService {
 
     return result;
   }
+
+  /**
+   * Batch creates Gmail drafts for all generated/approved drafts in a campaign.
+   * Automatically approves drafts if required and enqueues BullMQ creation jobs.
+   */
+  async createGmailDraftsForCampaign(campaignId: string): Promise<{
+    campaignId: string;
+    draftsQueued: number;
+    alreadyCreated: number;
+    failed: number;
+  }> {
+    const campaign = await this.campaignRepository.findOne({ where: { id: campaignId } });
+    if (!campaign) {
+      throw new NotFoundException(`Campaign with ID ${campaignId} not found`);
+    }
+
+    const drafts = await this.emailDraftRepository
+      .createQueryBuilder('draft')
+      .innerJoinAndSelect('draft.prospect', 'prospect')
+      .where('prospect.campaign_id = :campaignId', { campaignId })
+      .getMany();
+
+    let draftsQueued = 0;
+    let alreadyCreated = 0;
+    let failed = 0;
+
+    for (const draft of drafts) {
+      if (draft.gmailDraftId || draft.status === OutreachDraftStatus.GMAIL_DRAFT_CREATED) {
+        alreadyCreated++;
+        continue;
+      }
+
+      try {
+        // Automatically approve if not already approved or edited
+        if (draft.status !== OutreachDraftStatus.APPROVED && draft.status !== OutreachDraftStatus.EDITED) {
+          draft.status = OutreachDraftStatus.APPROVED;
+          await this.emailDraftRepository.save(draft);
+
+          if (draft.prospect) {
+            draft.prospect.draftStatus = ProspectDraftStatus.APPROVED;
+            await this.prospectRepository.save(draft.prospect);
+          }
+        }
+
+        // Queue BullMQ job for Gmail Draft creation
+        await this.gmailQueue.add(
+          JOB_CREATE_GMAIL_DRAFT,
+          { draftId: draft.id },
+          {
+            jobId: `gmail-draft-${draft.id}`,
+            attempts: 3,
+            backoff: { type: 'exponential', delay: 3000 },
+            removeOnComplete: true,
+          },
+        );
+
+        draftsQueued++;
+      } catch (err: any) {
+        this.logger.error(`Failed to queue Gmail draft for draft ${draft.id}: ${err.message}`, err.stack);
+        failed++;
+      }
+    }
+
+    this.logger.log(
+      `Campaign ${campaignId} batch Gmail drafts: Queued=${draftsQueued}, AlreadyCreated=${alreadyCreated}, Failed=${failed}`
+    );
+
+    return {
+      campaignId,
+      draftsQueued,
+      alreadyCreated,
+      failed,
+    };
+  }
 }
+

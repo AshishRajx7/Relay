@@ -127,10 +127,18 @@ export class GmailService {
       this.configService.get<string>('GOOGLE_REFRESH_TOKEN') ||
       this.configService.get<string>('GMAIL_REFRESH_TOKEN');
 
+    // Normalize candidateProfileId — treat empty strings and invalid values as undefined
+    const profileId = candidateProfileId?.trim() || undefined;
+
     // Look up in database if candidateProfileId provided or fallback to latest DB account
-    const dbAccount = candidateProfileId
-      ? await this.gmailAccountRepository.findOne({ where: { candidateProfileId } })
-      : await this.gmailAccountRepository.findOne({ order: { connectedAt: 'DESC' } });
+    let dbAccount: GmailAccount | null = null;
+    try {
+      dbAccount = profileId
+        ? await this.gmailAccountRepository.findOne({ where: { candidateProfileId: profileId } })
+        : await this.gmailAccountRepository.findOne({ where: {}, order: { connectedAt: 'DESC' } });
+    } catch (dbErr: any) {
+      this.logger.warn(`[DEBUG] gmail_accounts lookup failed: ${dbErr.message}`);
+    }
 
     if (dbAccount?.refreshToken) {
       refreshToken = dbAccount.refreshToken;
@@ -395,13 +403,14 @@ export class GmailService {
    */
   public async getAccountStatus(candidateProfileId?: string): Promise<GmailAccountStatus> {
     let account: GmailAccount | null = null;
+    const profileId = candidateProfileId?.trim() || undefined;
 
-    if (candidateProfileId) {
-      account = await this.gmailAccountRepository.findOne({ where: { candidateProfileId } });
+    if (profileId) {
+      account = await this.gmailAccountRepository.findOne({ where: { candidateProfileId: profileId } });
     }
 
     if (!account) {
-      account = await this.gmailAccountRepository.findOne({ order: { connectedAt: 'DESC' } });
+      account = await this.gmailAccountRepository.findOne({ where: {}, order: { connectedAt: 'DESC' } });
     }
 
     if (!account) {
@@ -428,13 +437,14 @@ export class GmailService {
    */
   public async disconnectAccount(candidateProfileId?: string): Promise<{ success: boolean; message: string }> {
     let account: GmailAccount | null = null;
+    const profileId = candidateProfileId?.trim() || undefined;
 
-    if (candidateProfileId) {
-      account = await this.gmailAccountRepository.findOne({ where: { candidateProfileId } });
+    if (profileId) {
+      account = await this.gmailAccountRepository.findOne({ where: { candidateProfileId: profileId } });
     }
 
     if (!account) {
-      account = await this.gmailAccountRepository.findOne({ order: { connectedAt: 'DESC' } });
+      account = await this.gmailAccountRepository.findOne({ where: {}, order: { connectedAt: 'DESC' } });
     }
 
     if (!account) {

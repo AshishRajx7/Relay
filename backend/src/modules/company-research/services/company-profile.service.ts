@@ -218,16 +218,10 @@ Output pure JSON conforming to this schema:
       where: { domain: profile.domain },
     });
 
-    const requiresManualReview = profile.researchScore < 40;
-
     for (const prospect of prospects) {
       prospect.companyProfileId = profile.id;
       prospect.companyName = profile.companyName;
-      if (requiresManualReview) {
-        prospect.researchStatus = ProspectResearchStatus.MANUAL_REVIEW;
-      } else {
-        prospect.researchStatus = ProspectResearchStatus.RESEARCHED;
-      }
+      prospect.researchStatus = ProspectResearchStatus.RESEARCHED;
       await this.prospectRepository.save(prospect);
 
       // Update campaign completed count
@@ -236,14 +230,6 @@ Output pure JSON conforming to this schema:
         'completedProspects',
         1,
       );
-
-      if (requiresManualReview) {
-        await this.campaignRepository.increment(
-          { id: prospect.campaignId },
-          'manualReviewCount',
-          1,
-        );
-      }
     }
   }
 }

@@ -22,6 +22,7 @@ import { AIProviderModule } from '../ai-provider/ai-provider.module';
 import { CompanyResearchModule } from '../company-research/company-research.module';
 import { CampaignsModule } from '../campaigns/campaigns.module';
 import { GmailModule } from '../gmail/gmail.module';
+import { StorageModule } from '../storage/storage.module';
 import { QUEUE_DRAFT_GENERATION, QUEUE_GMAIL_DRAFT } from '../../common/constants/app.constants';
 
 @Module({
@@ -43,6 +44,7 @@ import { QUEUE_DRAFT_GENERATION, QUEUE_GMAIL_DRAFT } from '../../common/constant
     AIProviderModule,
     CompanyResearchModule,
     GmailModule,
+    StorageModule,
     forwardRef(() => CampaignsModule),
   ],
   controllers: [OutreachController],

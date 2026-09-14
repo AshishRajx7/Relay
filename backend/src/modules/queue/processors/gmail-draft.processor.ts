@@ -6,8 +6,9 @@ import { Repository } from 'typeorm';
 import { QUEUE_GMAIL_DRAFT, JOB_CREATE_GMAIL_DRAFT } from '../../../common/constants/app.constants';
 import { EmailDraft, OutreachDraftStatus } from '../../outreach/entities/email-draft.entity';
 import { Prospect, ProspectDraftStatus } from '../../prospects/entities/prospect.entity';
-import { Campaign } from '../../campaigns/entities/campaign.entity';
-import { GmailDraftService } from '../../outreach/services/gmail-draft.service';
+import { Campaign, CampaignStatus } from '../../campaigns/entities/campaign.entity';
+import { GmailDraftService, EmailAttachment } from '../../outreach/services/gmail-draft.service';
+import { StorageService } from '../../storage/storage.service';
 
 @Processor(QUEUE_GMAIL_DRAFT, { concurrency: 2 })
 export class GmailDraftProcessor extends WorkerHost {
@@ -21,6 +22,7 @@ export class GmailDraftProcessor extends WorkerHost {
     @InjectRepository(Campaign)
     private readonly campaignRepository: Repository<Campaign>,
     private readonly gmailDraftService: GmailDraftService,
+    private readonly storageService: StorageService,
   ) {
     super();
   }
@@ -36,15 +38,52 @@ export class GmailDraftProcessor extends WorkerHost {
     const { draftId } = job.data;
     const draft = await this.emailDraftRepository.findOne({
       where: { id: draftId },
-      relations: ['prospect', 'prospect.campaign'],
+      relations: [
+        'prospect',
+        'prospect.campaign',
+        'prospect.campaign.candidateProfile',
+        'prospect.campaign.candidateProfile.resumeFile',
+      ],
     });
 
     if (!draft) {
       throw new Error(`EmailDraft with ID ${draftId} not found`);
     }
 
+    // Idempotency: skip if draft has already been created in Gmail
+    if (draft.gmailDraftId || draft.status === OutreachDraftStatus.GMAIL_DRAFT_CREATED) {
+      this.logger.log(
+        `[GmailDraftProcessor] Gmail draft already created for draft ${draftId} (Draft ID: ${draft.gmailDraftId}). Skipping.`
+      );
+      return { draftId: draft.id, gmailDraftId: draft.gmailDraftId, skipped: true };
+    }
+
     if (!draft.prospect) {
       throw new Error(`Prospect not linked to draft ${draftId}`);
+    }
+
+    const candidateProfile = draft.prospect.campaign?.candidateProfile;
+    const resumeFile = candidateProfile?.resumeFile;
+    let attachment: EmailAttachment | undefined;
+
+    if (resumeFile?.storagePath) {
+      try {
+        const fileBuffer = await this.storageService.readFile(resumeFile.storagePath);
+        const candidateName = candidateProfile?.name?.trim() || 'Candidate';
+        const sanitizedFilename = `Resume - ${candidateName.replace(/[^a-zA-Z0-9 _-]/g, '')}.pdf`;
+        attachment = {
+          filename: sanitizedFilename,
+          content: fileBuffer,
+          contentType: 'application/pdf',
+        };
+        this.logger.log(
+          `[GmailDraftProcessor] Loaded resume "${sanitizedFilename}" (${fileBuffer.length} bytes) for ${draft.prospect.email}`,
+        );
+      } catch (fileErr: any) {
+        this.logger.warn(
+          `[GmailDraftProcessor] Could not load resume file (${resumeFile.storagePath}): ${fileErr.message}. Creating draft without attachment.`,
+        );
+      }
     }
 
     try {
@@ -53,7 +92,8 @@ export class GmailDraftProcessor extends WorkerHost {
         draft.prospect.email,
         draft.subject,
         draft.body,
-        draft.prospect.campaign?.candidateProfileId,
+        candidateProfile?.id,
+        attachment,
       );
 
       draft.gmailDraftId = result.gmailDraftId;
@@ -70,6 +110,16 @@ export class GmailDraftProcessor extends WorkerHost {
           'gmailDraftCount',
           1,
         );
+
+        // Check if all drafts in campaign have been created
+        const campaign = await this.campaignRepository.findOne({ where: { id: draft.prospect.campaignId } });
+        if (campaign && campaign.gmailDraftCount >= campaign.totalProspects && campaign.totalProspects > 0) {
+          campaign.status = CampaignStatus.COMPLETED;
+          await this.campaignRepository.save(campaign);
+          this.logger.log(
+            `[GmailDraftProcessor] Campaign "${campaign.name}" (${campaign.id}) has completed all Gmail drafts! Marked COMPLETED.`
+          );
+        }
       }
 
       this.logger.log(`Gmail Draft created successfully for ${draft.prospect.email} (Draft ID: ${result.gmailDraftId})`);

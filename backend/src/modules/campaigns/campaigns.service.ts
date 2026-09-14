@@ -18,6 +18,7 @@ import {
   JOB_RESEARCH_COMPANY,
   QUEUE_DRAFT_GENERATION,
   JOB_GENERATE_DRAFT,
+  JOB_GENERATE_DRAFTS,
 } from '../../common/constants/app.constants';
 
 export interface CampaignOverviewDto {
@@ -270,4 +271,73 @@ export class CampaignsService {
       message: `Enqueued ${retriedCount} retryable jobs for campaign ${campaign.name}`,
     };
   }
+
+  /**
+   * Checks if all prospects in a campaign have completed research, and if so,
+   * enqueues JOB_GENERATE_DRAFTS with a deterministic jobId (exactly once).
+   */
+  async checkAndAutoTriggerDrafts(campaignId: string): Promise<boolean> {
+    const campaign = await this.findOne(campaignId);
+    const pendingCount = await this.prospectRepository.count({
+      where: [
+        { campaignId, researchStatus: ProspectResearchStatus.PENDING },
+        { campaignId, researchStatus: ProspectResearchStatus.RESEARCHING },
+      ],
+    });
+
+    if (pendingCount > 0) {
+      this.logger.log(
+        `Campaign "${campaign.name}" (${campaignId}) has ${pendingCount} prospects still awaiting research.`
+      );
+      return false;
+    }
+
+    const eligibleCount = await this.prospectRepository.count({
+      where: [
+        { campaignId, researchStatus: ProspectResearchStatus.RESEARCHED },
+        { campaignId, researchStatus: ProspectResearchStatus.MANUAL_REVIEW },
+      ],
+    });
+
+    if (eligibleCount === 0) {
+      this.logger.warn(`Campaign "${campaign.name}" (${campaignId}) has no eligible prospects for draft generation.`);
+      return false;
+    }
+
+    const jobId = `campaign-drafts-${campaignId}`;
+    this.logger.log(
+      `[CampaignsService] All prospects in campaign "${campaign.name}" completed research (${eligibleCount} eligible). Auto-chaining to draft generation (Job ID: ${jobId})...`
+    );
+
+    await this.draftQueue.add(
+      JOB_GENERATE_DRAFTS,
+      { campaignId },
+      {
+        jobId,
+        attempts: 3,
+        backoff: { type: 'exponential', delay: 3000 },
+        removeOnComplete: true,
+      },
+    );
+
+    return true;
+  }
+
+  /**
+   * Starts a campaign: sets status to PROCESSING and triggers draft generation if research is ready.
+   */
+  async startCampaign(id: string): Promise<{ campaignId: string; status: CampaignStatus; message: string }> {
+    const campaign = await this.findOne(id);
+    campaign.status = CampaignStatus.PROCESSING;
+    await this.campaignRepository.save(campaign);
+
+    await this.checkAndAutoTriggerDrafts(id);
+
+    return {
+      campaignId: campaign.id,
+      status: campaign.status,
+      message: `Campaign "${campaign.name}" started successfully. Research, draft generation, and Gmail drafts will process automatically.`,
+    };
+  }
 }
+

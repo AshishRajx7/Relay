@@ -9,6 +9,7 @@ export const JOB_RESEARCH_COMPANY = 'research-company';
 
 export const QUEUE_DRAFT_GENERATION = 'draft-generation';
 export const JOB_GENERATE_DRAFT = 'generate-draft';
+export const JOB_GENERATE_DRAFTS = 'generate-drafts';
 
 export const QUEUE_GMAIL_DRAFT = 'gmail-draft';
 export const JOB_CREATE_GMAIL_DRAFT = 'create-gmail-draft';

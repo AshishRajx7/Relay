@@ -44,6 +44,16 @@ export class OutreachController {
     return this.outreachService.findDraftsByCampaign(campaignId);
   }
 
+  @Post('campaigns/:id/create-gmail-drafts')
+  @ApiOperation({ summary: 'Batch create Gmail drafts for all generated/approved drafts in a campaign' })
+  @ApiParam({ name: 'id', description: 'Campaign UUID' })
+  @ApiResponse({ status: 200, description: 'Batch Gmail draft creation queued' })
+  async createGmailDrafts(
+    @Param('id', ParseUUIDPipe) campaignId: string,
+  ): Promise<{ campaignId: string; draftsQueued: number; alreadyCreated: number; failed: number }> {
+    return this.outreachService.createGmailDraftsForCampaign(campaignId);
+  }
+
   @Get('drafts/:id')
   @ApiOperation({ summary: 'Get a single draft with full reasoning breakdown, quality scorecard, and all variants' })
   @ApiParam({ name: 'id', description: 'Draft UUID' })

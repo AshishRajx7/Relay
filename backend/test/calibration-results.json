@@ -1,0 +1,1131 @@
+{
+  "total": 55,
+  "distributionSummary": {
+    "tier1_excellent": 8,
+    "tier2_good": 19,
+    "tier3_moderate": 16,
+    "tier4_low": 8,
+    "tier5_very_low": 4
+  },
+  "below35": [
+    {
+      "companyName": "Cloudflare",
+      "domain": "cloudflare.com",
+      "industry": "Cloud Infrastructure & Cybersecurity",
+      "businessModel": "B2B SaaS, Edge Network",
+      "hasTechSignals": true,
+      "techSignalsCount": 6,
+      "chosenProject": "BranchGuard Authorization",
+      "score": 34,
+      "strategy": "BUSINESS_ONLY",
+      "matchedTechnologies": [],
+      "matchedSkills": [
+        "security"
+      ],
+      "whyRelevant": "General software engineering inquiry. Candidate's experience building BranchGuard Authorization showcases core backend engineering, distributed systems, and rapid learning ability."
+    },
+    {
+      "companyName": "Stripe",
+      "domain": "stripe.com",
+      "industry": "Fintech",
+      "businessModel": "Unknown",
+      "hasTechSignals": false,
+      "techSignalsCount": 0,
+      "chosenProject": "Sentinel Gateway",
+      "score": 34,
+      "strategy": "BUSINESS_ONLY",
+      "matchedTechnologies": [],
+      "matchedSkills": [
+        "distributed"
+      ],
+      "whyRelevant": "General software engineering inquiry. Candidate's experience building Sentinel Gateway showcases core backend engineering, distributed systems, and rapid learning ability."
+    },
+    {
+      "companyName": "Happiest Minds",
+      "domain": "happiestminds.com",
+      "industry": "IT Services",
+      "businessModel": "B2B Services",
+      "hasTechSignals": true,
+      "techSignalsCount": 5,
+      "chosenProject": "Minimal Workflow Engine",
+      "score": 27,
+      "strategy": "TECH_STACK_MATCH",
+      "matchedTechnologies": [
+        "Python"
+      ],
+      "matchedSkills": [],
+      "whyRelevant": "General software engineering inquiry. Candidate's experience building Minimal Workflow Engine showcases core backend engineering, distributed systems, and rapid learning ability."
+    },
+    {
+      "companyName": "L&T Technology Services",
+      "domain": "ltts.com",
+      "industry": "Engineering Services",
+      "businessModel": "Enterprise Consulting",
+      "hasTechSignals": true,
+      "techSignalsCount": 5,
+      "chosenProject": "Minimal Workflow Engine",
+      "score": 27,
+      "strategy": "TECH_STACK_MATCH",
+      "matchedTechnologies": [
+        "Python"
+      ],
+      "matchedSkills": [],
+      "whyRelevant": "General software engineering inquiry. Candidate's experience building Minimal Workflow Engine showcases core backend engineering, distributed systems, and rapid learning ability."
+    },
+    {
+      "companyName": "Pinecone",
+      "domain": "pinecone.io",
+      "industry": "Developer Tools / AI",
+      "businessModel": "B2B SaaS",
+      "hasTechSignals": true,
+      "techSignalsCount": 6,
+      "chosenProject": "Minimal Workflow Engine",
+      "score": 27,
+      "strategy": "TECH_STACK_MATCH",
+      "matchedTechnologies": [
+        "Python"
+      ],
+      "matchedSkills": [],
+      "whyRelevant": "General software engineering inquiry. Candidate's experience building Minimal Workflow Engine showcases core backend engineering, distributed systems, and rapid learning ability."
+    },
+    {
+      "companyName": "Wipro",
+      "domain": "wipro.com",
+      "industry": "IT Services / Enterprise Consulting",
+      "businessModel": "Global Consulting",
+      "hasTechSignals": true,
+      "techSignalsCount": 5,
+      "chosenProject": "Minimal Workflow Engine",
+      "score": 27,
+      "strategy": "TECH_STACK_MATCH",
+      "matchedTechnologies": [
+        "Python"
+      ],
+      "matchedSkills": [],
+      "whyRelevant": "General software engineering inquiry. Candidate's experience building Minimal Workflow Engine showcases core backend engineering, distributed systems, and rapid learning ability."
+    },
+    {
+      "companyName": "Fly.io",
+      "domain": "fly.io",
+      "industry": "Cloud Infrastructure",
+      "businessModel": "B2B SaaS, Compute",
+      "hasTechSignals": true,
+      "techSignalsCount": 5,
+      "chosenProject": "Sentinel Gateway",
+      "score": 24,
+      "strategy": "BUSINESS_ONLY",
+      "matchedTechnologies": [],
+      "matchedSkills": [],
+      "whyRelevant": "General software engineering inquiry. Candidate's experience building Sentinel Gateway showcases core backend engineering, distributed systems, and rapid learning ability."
+    },
+    {
+      "companyName": "SourceFuse",
+      "domain": "sourcefuse.com",
+      "industry": "AI & Cloud Services",
+      "businessModel": "B2B Services",
+      "hasTechSignals": false,
+      "techSignalsCount": 0,
+      "chosenProject": "BullMQ Notification System",
+      "score": 24,
+      "strategy": "BUSINESS_ONLY",
+      "matchedTechnologies": [],
+      "matchedSkills": [],
+      "whyRelevant": "General software engineering inquiry. Candidate's experience building BullMQ Notification System showcases core backend engineering, distributed systems, and rapid learning ability."
+    },
+    {
+      "companyName": "PlanetScale",
+      "domain": "planetscale.com",
+      "industry": "Database SaaS",
+      "businessModel": "B2B SaaS, Database",
+      "hasTechSignals": true,
+      "techSignalsCount": 4,
+      "chosenProject": "BullMQ Notification System",
+      "score": 12,
+      "strategy": "BUSINESS_ONLY",
+      "matchedTechnologies": [],
+      "matchedSkills": [],
+      "whyRelevant": "General software engineering inquiry. Candidate's experience building BullMQ Notification System showcases core backend engineering, distributed systems, and rapid learning ability."
+    },
+    {
+      "companyName": "ibhubs.co",
+      "domain": "ibhubs.co",
+      "industry": "Technology",
+      "businessModel": "B2B SaaS",
+      "hasTechSignals": false,
+      "techSignalsCount": 0,
+      "chosenProject": "BullMQ Notification System",
+      "score": 12,
+      "strategy": "BUSINESS_ONLY",
+      "matchedTechnologies": [],
+      "matchedSkills": [],
+      "whyRelevant": "General software engineering inquiry. Candidate's experience building BullMQ Notification System showcases core backend engineering, distributed systems, and rapid learning ability."
+    },
+    {
+      "companyName": "Apollo Hospitals",
+      "domain": "apollohospitals.com",
+      "industry": "Healthcare",
+      "businessModel": "Hospital & Clinical Network",
+      "hasTechSignals": false,
+      "techSignalsCount": 0,
+      "chosenProject": "BullMQ Notification System",
+      "score": 0,
+      "strategy": "BUSINESS_ONLY",
+      "matchedTechnologies": [],
+      "matchedSkills": [],
+      "whyRelevant": "General software engineering inquiry. Candidate's experience building BullMQ Notification System showcases core backend engineering, distributed systems, and rapid learning ability."
+    },
+    {
+      "companyName": "Dr Lal PathLabs",
+      "domain": "lalpathlabs.com",
+      "industry": "Healthcare / Diagnostics",
+      "businessModel": "Pathology Labs",
+      "hasTechSignals": false,
+      "techSignalsCount": 0,
+      "chosenProject": "BullMQ Notification System",
+      "score": 0,
+      "strategy": "BUSINESS_ONLY",
+      "matchedTechnologies": [],
+      "matchedSkills": [],
+      "whyRelevant": "General software engineering inquiry. Candidate's experience building BullMQ Notification System showcases core backend engineering, distributed systems, and rapid learning ability."
+    }
+  ],
+  "all": [
+    {
+      "companyName": "BrowserStack",
+      "domain": "browserstack.com",
+      "industry": "Developer Tools",
+      "businessModel": "B2B SaaS",
+      "hasTechSignals": true,
+      "techSignalsCount": 7,
+      "chosenProject": "Sentinel Gateway",
+      "score": 93,
+      "strategy": "TECH_STACK_MATCH",
+      "matchedTechnologies": [
+        "Node.js",
+        "Redis",
+        "Docker"
+      ],
+      "matchedSkills": [],
+      "whyRelevant": "BrowserStack utilizes Node.js, Redis, Docker. Candidate's production work on Sentinel Gateway directly mirrors this technical stack."
+    },
+    {
+      "companyName": "Postman",
+      "domain": "postman.com",
+      "industry": "Developer Tools",
+      "businessModel": "B2B SaaS",
+      "hasTechSignals": true,
+      "techSignalsCount": 7,
+      "chosenProject": "BullMQ Notification System",
+      "score": 89,
+      "strategy": "TECH_STACK_MATCH",
+      "matchedTechnologies": [
+        "Redis",
+        "TypeScript",
+        "PostgreSQL"
+      ],
+      "matchedSkills": [
+        "reliability"
+      ],
+      "whyRelevant": "Postman utilizes Redis, TypeScript, PostgreSQL. Candidate's production work on BullMQ Notification System directly mirrors this technical stack."
+    },
+    {
+      "companyName": "Notion",
+      "domain": "notion.so",
+      "industry": "Productivity & Collaboration",
+      "businessModel": "B2B SaaS",
+      "hasTechSignals": true,
+      "techSignalsCount": 6,
+      "chosenProject": "BullMQ Notification System",
+      "score": 83,
+      "strategy": "TECH_STACK_MATCH",
+      "matchedTechnologies": [
+        "Redis",
+        "TypeScript",
+        "PostgreSQL"
+      ],
+      "matchedSkills": [],
+      "whyRelevant": "Notion utilizes Redis, TypeScript, PostgreSQL. Candidate's production work on BullMQ Notification System directly mirrors this technical stack."
+    },
+    {
+      "companyName": "Retool",
+      "domain": "retool.com",
+      "industry": "Developer Tools",
+      "businessModel": "B2B SaaS, Low-Code",
+      "hasTechSignals": true,
+      "techSignalsCount": 6,
+      "chosenProject": "BullMQ Notification System",
+      "score": 83,
+      "strategy": "TECH_STACK_MATCH",
+      "matchedTechnologies": [
+        "Redis",
+        "TypeScript",
+        "PostgreSQL"
+      ],
+      "matchedSkills": [],
+      "whyRelevant": "Retool utilizes Redis, TypeScript, PostgreSQL. Candidate's production work on BullMQ Notification System directly mirrors this technical stack."
+    },
+    {
+      "companyName": "Zepto",
+      "domain": "zeptonow.com",
+      "industry": "Quick Commerce",
+      "businessModel": "Instant Delivery",
+      "hasTechSignals": true,
+      "techSignalsCount": 6,
+      "chosenProject": "Redis Optimization",
+      "score": 77,
+      "strategy": "TECH_STACK_MATCH",
+      "matchedTechnologies": [
+        "Redis",
+        "PostgreSQL",
+        "Node.js"
+      ],
+      "matchedSkills": [
+        "optimization",
+        "latency"
+      ],
+      "whyRelevant": "Zepto utilizes Redis, PostgreSQL, Node.js. Candidate's production work on Redis Optimization directly mirrors this technical stack."
+    },
+    {
+      "companyName": "Airtable",
+      "domain": "airtable.com",
+      "industry": "Productivity SaaS",
+      "businessModel": "B2B SaaS, Low-Code Database",
+      "hasTechSignals": true,
+      "techSignalsCount": 5,
+      "chosenProject": "Survey Platform",
+      "score": 75,
+      "strategy": "TECH_STACK_MATCH",
+      "matchedTechnologies": [
+        "React",
+        "PostgreSQL",
+        "TypeScript"
+      ],
+      "matchedSkills": [],
+      "whyRelevant": "Airtable utilizes React, PostgreSQL, TypeScript. Candidate's production work on Survey Platform directly mirrors this technical stack."
+    },
+    {
+      "companyName": "Figma",
+      "domain": "figma.com",
+      "industry": "Design & Developer Tooling",
+      "businessModel": "B2B SaaS",
+      "hasTechSignals": true,
+      "techSignalsCount": 8,
+      "chosenProject": "BullMQ Notification System",
+      "score": 75,
+      "strategy": "TECH_STACK_MATCH",
+      "matchedTechnologies": [
+        "Redis",
+        "TypeScript",
+        "PostgreSQL"
+      ],
+      "matchedSkills": [],
+      "whyRelevant": "Figma utilizes Redis, TypeScript, PostgreSQL. Candidate's production work on BullMQ Notification System directly mirrors this technical stack."
+    },
+    {
+      "companyName": "Razorpay",
+      "domain": "razorpay.com",
+      "industry": "Fintech",
+      "businessModel": "B2B SaaS, Payment Gateway",
+      "hasTechSignals": true,
+      "techSignalsCount": 8,
+      "chosenProject": "Redis Optimization",
+      "score": 75,
+      "strategy": "TECH_STACK_MATCH",
+      "matchedTechnologies": [
+        "Redis",
+        "PostgreSQL",
+        "Node.js"
+      ],
+      "matchedSkills": [],
+      "whyRelevant": "Razorpay utilizes Redis, PostgreSQL, Node.js. Candidate's production work on Redis Optimization directly mirrors this technical stack."
+    },
+    {
+      "companyName": "Nagarro",
+      "domain": "nagarro.com",
+      "industry": "IT Services / Digital Engineering",
+      "businessModel": "B2B Services",
+      "hasTechSignals": true,
+      "techSignalsCount": 6,
+      "chosenProject": "Sentinel Gateway",
+      "score": 73,
+      "strategy": "TECH_STACK_MATCH",
+      "matchedTechnologies": [
+        "Node.js",
+        "Docker"
+      ],
+      "matchedSkills": [],
+      "whyRelevant": "Nagarro utilizes Node.js, Docker. Candidate's production work on Sentinel Gateway directly mirrors this technical stack."
+    },
+    {
+      "companyName": "Darwinbox",
+      "domain": "darwinbox.com",
+      "industry": "HR Tech",
+      "businessModel": "B2B SaaS",
+      "hasTechSignals": true,
+      "techSignalsCount": 6,
+      "chosenProject": "Redis Optimization",
+      "score": 71,
+      "strategy": "TECH_STACK_MATCH",
+      "matchedTechnologies": [
+        "Redis",
+        "PostgreSQL",
+        "Node.js"
+      ],
+      "matchedSkills": [
+        "performance"
+      ],
+      "whyRelevant": "Darwinbox utilizes Redis, PostgreSQL, Node.js. Candidate's production work on Redis Optimization directly mirrors this technical stack."
+    },
+    {
+      "companyName": "Temporal",
+      "domain": "temporal.io",
+      "industry": "Developer Tools & Workflow Engines",
+      "businessModel": "B2B SaaS, Developer Tooling",
+      "hasTechSignals": true,
+      "techSignalsCount": 7,
+      "chosenProject": "BullMQ Notification System",
+      "score": 70,
+      "strategy": "TECH_STACK_MATCH",
+      "matchedTechnologies": [
+        "TypeScript",
+        "PostgreSQL"
+      ],
+      "matchedSkills": [
+        "event-driven"
+      ],
+      "whyRelevant": "Temporal utilizes TypeScript, PostgreSQL. Candidate's production work on BullMQ Notification System directly mirrors this technical stack."
+    },
+    {
+      "companyName": "Freshworks",
+      "domain": "freshworks.com",
+      "industry": "B2B SaaS",
+      "businessModel": "Customer Engagement & CRM",
+      "hasTechSignals": true,
+      "techSignalsCount": 7,
+      "chosenProject": "Redis Optimization",
+      "score": 64,
+      "strategy": "TECH_STACK_MATCH",
+      "matchedTechnologies": [
+        "Redis",
+        "PostgreSQL",
+        "Node.js"
+      ],
+      "matchedSkills": [],
+      "whyRelevant": "Freshworks is focused on B2B SaaS and Customer Engagement & CRM. Candidate's engineering work on Redis Optimization (Eliminated database query bottlenecks, introduced Redis caching for hot paths, and optimized relational indexes.) aligns with their platform challenges."
+    },
+    {
+      "companyName": "Leena AI",
+      "domain": "leena.ai",
+      "industry": "HR Tech",
+      "businessModel": "Enterprise AI Copilot",
+      "hasTechSignals": true,
+      "techSignalsCount": 6,
+      "chosenProject": "Sentinel Gateway",
+      "score": 64,
+      "strategy": "TECH_STACK_MATCH",
+      "matchedTechnologies": [
+        "Node.js",
+        "Redis",
+        "Docker"
+      ],
+      "matchedSkills": [],
+      "whyRelevant": "Leena AI is focused on HR Tech and Enterprise AI Copilot. Candidate's engineering work on Sentinel Gateway (Built a high-throughput distributed API gateway with Redis rate limiting, distributed tracing with OpenTelemetry, and Prometheus metrics.) aligns with their platform challenges."
+    },
+    {
+      "companyName": "Prisma",
+      "domain": "prisma.io",
+      "industry": "Developer Tools & ORM",
+      "businessModel": "B2B SaaS, Developer Tools",
+      "hasTechSignals": true,
+      "techSignalsCount": 5,
+      "chosenProject": "Founder Experience",
+      "score": 64,
+      "strategy": "TECH_STACK_MATCH",
+      "matchedTechnologies": [
+        "TypeScript",
+        "Node.js",
+        "PostgreSQL"
+      ],
+      "matchedSkills": [],
+      "whyRelevant": "Prisma is focused on Developer Tools & ORM and B2B SaaS, Developer Tools. Candidate's engineering work on Founder Experience (Co-founded quick commerce startup D'Rons end to end, building backend APIs, payment integrations, and vendor management workflows.) aligns with their platform challenges."
+    },
+    {
+      "companyName": "Urban Company",
+      "domain": "urbancompany.com",
+      "industry": "Consumer Services",
+      "businessModel": "Gig Marketplace",
+      "hasTechSignals": true,
+      "techSignalsCount": 5,
+      "chosenProject": "Redis Optimization",
+      "score": 64,
+      "strategy": "TECH_STACK_MATCH",
+      "matchedTechnologies": [
+        "Redis",
+        "PostgreSQL",
+        "Node.js"
+      ],
+      "matchedSkills": [],
+      "whyRelevant": "Urban Company is focused on Consumer Services and Gig Marketplace. Candidate's engineering work on Redis Optimization (Eliminated database query bottlenecks, introduced Redis caching for hot paths, and optimized relational indexes.) aligns with their platform challenges."
+    },
+    {
+      "companyName": "Brex",
+      "domain": "brex.com",
+      "industry": "Fintech",
+      "businessModel": "B2B SaaS, Corporate Cards",
+      "hasTechSignals": true,
+      "techSignalsCount": 7,
+      "chosenProject": "BullMQ Notification System",
+      "score": 63,
+      "strategy": "TECH_STACK_MATCH",
+      "matchedTechnologies": [
+        "TypeScript",
+        "PostgreSQL"
+      ],
+      "matchedSkills": [],
+      "whyRelevant": "Brex is focused on Fintech and B2B SaaS, Corporate Cards. Candidate's engineering work on BullMQ Notification System (Engineered an idempotent, replay-safe BullMQ notification system with batched processing, retry backoff, and paginated in-app feeds.) aligns with their platform challenges."
+    },
+    {
+      "companyName": "Supabase",
+      "domain": "supabase.com",
+      "industry": "Developer Tools",
+      "businessModel": "B2B SaaS, Database",
+      "hasTechSignals": true,
+      "techSignalsCount": 5,
+      "chosenProject": "BullMQ Notification System",
+      "score": 63,
+      "strategy": "TECH_STACK_MATCH",
+      "matchedTechnologies": [
+        "TypeScript",
+        "PostgreSQL"
+      ],
+      "matchedSkills": [],
+      "whyRelevant": "Supabase is focused on Developer Tools and B2B SaaS, Database. Candidate's engineering work on BullMQ Notification System (Engineered an idempotent, replay-safe BullMQ notification system with batched processing, retry backoff, and paginated in-app feeds.) aligns with their platform challenges."
+    },
+    {
+      "companyName": "Swiggy",
+      "domain": "swiggy.com",
+      "industry": "Quick Commerce",
+      "businessModel": "Marketplace & Logistics",
+      "hasTechSignals": true,
+      "techSignalsCount": 7,
+      "chosenProject": "Founder Experience",
+      "score": 60,
+      "strategy": "TECH_STACK_MATCH",
+      "matchedTechnologies": [
+        "PostgreSQL"
+      ],
+      "matchedSkills": [
+        "quick commerce",
+        "delivery",
+        "dispatch"
+      ],
+      "whyRelevant": "Swiggy is focused on Quick Commerce and Marketplace & Logistics. Candidate's engineering work on Founder Experience (Co-founded quick commerce startup D'Rons end to end, building backend APIs, payment integrations, and vendor management workflows.) aligns with their platform challenges."
+    },
+    {
+      "companyName": "CRED",
+      "domain": "cred.club",
+      "industry": "Fintech",
+      "businessModel": "Members-Only Credit Platform",
+      "hasTechSignals": true,
+      "techSignalsCount": 6,
+      "chosenProject": "BullMQ Notification System",
+      "score": 58,
+      "strategy": "TECH_STACK_MATCH",
+      "matchedTechnologies": [
+        "Redis",
+        "PostgreSQL"
+      ],
+      "matchedSkills": [
+        "event-driven"
+      ],
+      "whyRelevant": "CRED is focused on Fintech and Members-Only Credit Platform. Candidate's engineering work on BullMQ Notification System (Engineered an idempotent, replay-safe BullMQ notification system with batched processing, retry backoff, and paginated in-app feeds.) aligns with their platform challenges."
+    },
+    {
+      "companyName": "Datadog",
+      "domain": "datadog.com",
+      "industry": "Observability & Cloud Monitoring",
+      "businessModel": "B2B SaaS",
+      "hasTechSignals": true,
+      "techSignalsCount": 7,
+      "chosenProject": "BullMQ Notification System",
+      "score": 58,
+      "strategy": "TECH_STACK_MATCH",
+      "matchedTechnologies": [
+        "Redis",
+        "PostgreSQL"
+      ],
+      "matchedSkills": [
+        "distributed systems"
+      ],
+      "whyRelevant": "Datadog is focused on Observability & Cloud Monitoring and B2B SaaS. Candidate's engineering work on BullMQ Notification System (Engineered an idempotent, replay-safe BullMQ notification system with batched processing, retry backoff, and paginated in-app feeds.) aligns with their platform challenges."
+    },
+    {
+      "companyName": "Meesho",
+      "domain": "meesho.com",
+      "industry": "E-Commerce",
+      "businessModel": "Social Commerce Marketplace",
+      "hasTechSignals": true,
+      "techSignalsCount": 7,
+      "chosenProject": "Redis Optimization",
+      "score": 58,
+      "strategy": "TECH_STACK_MATCH",
+      "matchedTechnologies": [
+        "Redis",
+        "PostgreSQL"
+      ],
+      "matchedSkills": [
+        "indexing"
+      ],
+      "whyRelevant": "Meesho is focused on E-Commerce and Social Commerce Marketplace. Candidate's engineering work on Redis Optimization (Eliminated database query bottlenecks, introduced Redis caching for hot paths, and optimized relational indexes.) aligns with their platform challenges."
+    },
+    {
+      "companyName": "Ramp",
+      "domain": "ramp.com",
+      "industry": "Fintech",
+      "businessModel": "B2B SaaS, Spend Automation",
+      "hasTechSignals": true,
+      "techSignalsCount": 5,
+      "chosenProject": "Minimal Workflow Engine",
+      "score": 58,
+      "strategy": "TECH_STACK_MATCH",
+      "matchedTechnologies": [
+        "FastAPI",
+        "Python"
+      ],
+      "matchedSkills": [
+        "automation"
+      ],
+      "whyRelevant": "Ramp is focused on Fintech and B2B SaaS, Spend Automation. Candidate's engineering work on Minimal Workflow Engine (Created a graph-based DAG workflow orchestration engine executing asynchronous tasks with real-time WebSocket telemetry.) aligns with their platform challenges."
+    },
+    {
+      "companyName": "Zerodha",
+      "domain": "zerodha.com",
+      "industry": "Fintech",
+      "businessModel": "Discount Brokerage",
+      "hasTechSignals": true,
+      "techSignalsCount": 5,
+      "chosenProject": "Redis Optimization",
+      "score": 58,
+      "strategy": "TECH_STACK_MATCH",
+      "matchedTechnologies": [
+        "Redis",
+        "PostgreSQL"
+      ],
+      "matchedSkills": [
+        "latency"
+      ],
+      "whyRelevant": "Zerodha is focused on Fintech and Discount Brokerage. Candidate's engineering work on Redis Optimization (Eliminated database query bottlenecks, introduced Redis caching for hot paths, and optimized relational indexes.) aligns with their platform challenges."
+    },
+    {
+      "companyName": "Zomato",
+      "domain": "zomato.com",
+      "industry": "Quick Commerce",
+      "businessModel": "Marketplace & Logistics",
+      "hasTechSignals": true,
+      "techSignalsCount": 6,
+      "chosenProject": "Founder Experience",
+      "score": 53,
+      "strategy": "TECH_STACK_MATCH",
+      "matchedTechnologies": [
+        "PostgreSQL"
+      ],
+      "matchedSkills": [
+        "quick commerce",
+        "delivery"
+      ],
+      "whyRelevant": "Zomato is focused on Quick Commerce and Marketplace & Logistics. Candidate's engineering work on Founder Experience (Co-founded quick commerce startup D'Rons end to end, building backend APIs, payment integrations, and vendor management workflows.) aligns with their platform challenges."
+    },
+    {
+      "companyName": "Groww",
+      "domain": "groww.in",
+      "industry": "Fintech",
+      "businessModel": "Investment Platform",
+      "hasTechSignals": true,
+      "techSignalsCount": 6,
+      "chosenProject": "BullMQ Notification System",
+      "score": 51,
+      "strategy": "TECH_STACK_MATCH",
+      "matchedTechnologies": [
+        "Redis",
+        "PostgreSQL"
+      ],
+      "matchedSkills": [],
+      "whyRelevant": "Groww is focused on Fintech and Investment Platform. Candidate's engineering work on BullMQ Notification System (Engineered an idempotent, replay-safe BullMQ notification system with batched processing, retry backoff, and paginated in-app feeds.) aligns with their platform challenges."
+    },
+    {
+      "companyName": "Zoho",
+      "domain": "zoho.com",
+      "industry": "B2B SaaS",
+      "businessModel": "Business Suite",
+      "hasTechSignals": true,
+      "techSignalsCount": 5,
+      "chosenProject": "BullMQ Notification System",
+      "score": 51,
+      "strategy": "TECH_STACK_MATCH",
+      "matchedTechnologies": [
+        "Redis",
+        "PostgreSQL"
+      ],
+      "matchedSkills": [],
+      "whyRelevant": "Zoho is focused on B2B SaaS and Business Suite. Candidate's engineering work on BullMQ Notification System (Engineered an idempotent, replay-safe BullMQ notification system with batched processing, retry backoff, and paginated in-app feeds.) aligns with their platform challenges."
+    },
+    {
+      "companyName": "Persistent Systems",
+      "domain": "persistent.com",
+      "industry": "IT Services / Digital Engineering",
+      "businessModel": "B2B Services",
+      "hasTechSignals": true,
+      "techSignalsCount": 5,
+      "chosenProject": "Activity Log Platform",
+      "score": 50,
+      "strategy": "TECH_STACK_MATCH",
+      "matchedTechnologies": [
+        "PostgreSQL"
+      ],
+      "matchedSkills": [],
+      "whyRelevant": "Persistent Systems is focused on IT Services / Digital Engineering and B2B Services. Candidate's engineering work on Activity Log Platform (Architected a company-wide event-driven activity logging and audit trail platform across 15+ HR modules with actor attribution.) aligns with their platform challenges."
+    },
+    {
+      "companyName": "PostHog",
+      "domain": "posthog.com",
+      "industry": "Developer Tools",
+      "businessModel": "B2B SaaS, Usage-based API",
+      "hasTechSignals": true,
+      "techSignalsCount": 9,
+      "chosenProject": "Survey Platform",
+      "score": 47,
+      "strategy": "TECH_STACK_MATCH",
+      "matchedTechnologies": [
+        "PostgreSQL"
+      ],
+      "matchedSkills": [
+        "analytics"
+      ],
+      "whyRelevant": "PostHog is focused on Developer Tools and B2B SaaS, Usage-based API. Candidate's engineering work on Survey Platform (Owned the full backend for a survey builder with custom targeting, response aggregation, and zero-leak anonymity architecture.) aligns with their platform challenges."
+    },
+    {
+      "companyName": "Vercel",
+      "domain": "vercel.com",
+      "industry": "Developer Tools",
+      "businessModel": "Unknown",
+      "hasTechSignals": false,
+      "techSignalsCount": 0,
+      "chosenProject": "Sentinel Gateway",
+      "score": 46,
+      "strategy": "BUSINESS_ONLY",
+      "matchedTechnologies": [],
+      "matchedSkills": [
+        "distributed"
+      ],
+      "whyRelevant": "Vercel is focused on Developer Tools and platform solutions. Candidate's engineering work on Sentinel Gateway (Built a high-throughput distributed API gateway with Redis rate limiting, distributed tracing with OpenTelemetry, and Prometheus metrics.) aligns with their platform challenges."
+    },
+    {
+      "companyName": "Delhivery",
+      "domain": "delhivery.com",
+      "industry": "Logistics",
+      "businessModel": "B2B / B2C Supply Chain",
+      "hasTechSignals": true,
+      "techSignalsCount": 5,
+      "chosenProject": "BullMQ Notification System",
+      "score": 44,
+      "strategy": "TECH_STACK_MATCH",
+      "matchedTechnologies": [
+        "Redis",
+        "PostgreSQL"
+      ],
+      "matchedSkills": [],
+      "whyRelevant": "Delhivery is focused on Logistics and B2B / B2C Supply Chain. Candidate's engineering work on BullMQ Notification System (Engineered an idempotent, replay-safe BullMQ notification system with batched processing, retry backoff, and paginated in-app feeds.) aligns with their platform challenges."
+    },
+    {
+      "companyName": "Modal",
+      "domain": "modal.com",
+      "industry": "Cloud Infrastructure & AI/ML",
+      "businessModel": "B2B SaaS, Serverless GPU",
+      "hasTechSignals": true,
+      "techSignalsCount": 5,
+      "chosenProject": "Minimal Workflow Engine",
+      "score": 44,
+      "strategy": "TECH_STACK_MATCH",
+      "matchedTechnologies": [
+        "Python",
+        "WebSockets"
+      ],
+      "matchedSkills": [],
+      "whyRelevant": "Modal is focused on Cloud Infrastructure & AI/ML and B2B SaaS, Serverless GPU. Candidate's engineering work on Minimal Workflow Engine (Created a graph-based DAG workflow orchestration engine executing asynchronous tasks with real-time WebSocket telemetry.) aligns with their platform challenges."
+    },
+    {
+      "companyName": "Hasura",
+      "domain": "hasura.io",
+      "industry": "Developer Tools",
+      "businessModel": "B2B SaaS",
+      "hasTechSignals": true,
+      "techSignalsCount": 6,
+      "chosenProject": "BullMQ Notification System",
+      "score": 42,
+      "strategy": "TECH_STACK_MATCH",
+      "matchedTechnologies": [
+        "PostgreSQL"
+      ],
+      "matchedSkills": [],
+      "whyRelevant": "Hasura is focused on Developer Tools and B2B SaaS. Candidate's engineering work on BullMQ Notification System (Engineered an idempotent, replay-safe BullMQ notification system with batched processing, retry backoff, and paginated in-app feeds.) aligns with their platform challenges."
+    },
+    {
+      "companyName": "Thoughtworks",
+      "domain": "thoughtworks.com",
+      "industry": "IT Services / Technology Consulting",
+      "businessModel": "Enterprise Consulting",
+      "hasTechSignals": true,
+      "techSignalsCount": 7,
+      "chosenProject": "Sentinel Gateway",
+      "score": 42,
+      "strategy": "TECH_STACK_MATCH",
+      "matchedTechnologies": [
+        "Node.js"
+      ],
+      "matchedSkills": [],
+      "whyRelevant": "Thoughtworks is focused on IT Services / Technology Consulting and Enterprise Consulting. Candidate's engineering work on Sentinel Gateway (Built a high-throughput distributed API gateway with Redis rate limiting, distributed tracing with OpenTelemetry, and Prometheus metrics.) aligns with their platform challenges."
+    },
+    {
+      "companyName": "Cohere",
+      "domain": "cohere.com",
+      "industry": "AI / Developer Tools",
+      "businessModel": "Enterprise AI Platform",
+      "hasTechSignals": true,
+      "techSignalsCount": 6,
+      "chosenProject": "Sentinel Gateway",
+      "score": 40,
+      "strategy": "TECH_STACK_MATCH",
+      "matchedTechnologies": [
+        "Docker"
+      ],
+      "matchedSkills": [
+        "distributed"
+      ],
+      "whyRelevant": "Cohere is focused on AI / Developer Tools and Enterprise AI Platform. Candidate's engineering work on Sentinel Gateway (Built a high-throughput distributed API gateway with Redis rate limiting, distributed tracing with OpenTelemetry, and Prometheus metrics.) aligns with their platform challenges."
+    },
+    {
+      "companyName": "Render",
+      "domain": "render.com",
+      "industry": "Cloud Platform",
+      "businessModel": "B2B SaaS, Cloud Hosting",
+      "hasTechSignals": true,
+      "techSignalsCount": 6,
+      "chosenProject": "BullMQ Notification System",
+      "score": 40,
+      "strategy": "TECH_STACK_MATCH",
+      "matchedTechnologies": [
+        "PostgreSQL"
+      ],
+      "matchedSkills": [
+        "background"
+      ],
+      "whyRelevant": "Render is focused on Cloud Platform and B2B SaaS, Cloud Hosting. Candidate's engineering work on BullMQ Notification System (Engineered an idempotent, replay-safe BullMQ notification system with batched processing, retry backoff, and paginated in-app feeds.) aligns with their platform challenges."
+    },
+    {
+      "companyName": "Perennial Systems",
+      "domain": "perennialsys.com",
+      "industry": "IT Services / Digital Engineering",
+      "businessModel": "B2B Services (Talent Partnership, Dedicated Teams, AI-Native Digital Engineering)",
+      "hasTechSignals": true,
+      "techSignalsCount": 10,
+      "chosenProject": "Activity Log Platform",
+      "score": 36,
+      "strategy": "BUSINESS_ONLY",
+      "matchedTechnologies": [],
+      "matchedSkills": [],
+      "whyRelevant": "General software engineering inquiry. Candidate's experience building Activity Log Platform showcases core backend engineering, distributed systems, and rapid learning ability."
+    },
+    {
+      "companyName": "CleverTap",
+      "domain": "clevertap.com",
+      "industry": "Marketing Tech",
+      "businessModel": "B2B SaaS",
+      "hasTechSignals": true,
+      "techSignalsCount": 5,
+      "chosenProject": "BullMQ Notification System",
+      "score": 35,
+      "strategy": "TECH_STACK_MATCH",
+      "matchedTechnologies": [
+        "Redis"
+      ],
+      "matchedSkills": [],
+      "whyRelevant": "General software engineering inquiry. Candidate's experience building BullMQ Notification System showcases core backend engineering, distributed systems, and rapid learning ability."
+    },
+    {
+      "companyName": "Greytip",
+      "domain": "greythr.com",
+      "industry": "HR Tech",
+      "businessModel": "B2B SaaS",
+      "hasTechSignals": true,
+      "techSignalsCount": 4,
+      "chosenProject": "BullMQ Notification System",
+      "score": 35,
+      "strategy": "TECH_STACK_MATCH",
+      "matchedTechnologies": [
+        "Redis"
+      ],
+      "matchedSkills": [],
+      "whyRelevant": "General software engineering inquiry. Candidate's experience building BullMQ Notification System showcases core backend engineering, distributed systems, and rapid learning ability."
+    },
+    {
+      "companyName": "InMobi",
+      "domain": "inmobi.com",
+      "industry": "AdTech",
+      "businessModel": "Enterprise Advertising Platform",
+      "hasTechSignals": true,
+      "techSignalsCount": 6,
+      "chosenProject": "Activity Log Platform",
+      "score": 35,
+      "strategy": "TECH_STACK_MATCH",
+      "matchedTechnologies": [
+        "PostgreSQL"
+      ],
+      "matchedSkills": [],
+      "whyRelevant": "General software engineering inquiry. Candidate's experience building Activity Log Platform showcases core backend engineering, distributed systems, and rapid learning ability."
+    },
+    {
+      "companyName": "Infosys",
+      "domain": "infosys.com",
+      "industry": "IT Services / Enterprise Consulting",
+      "businessModel": "Global Consulting",
+      "hasTechSignals": true,
+      "techSignalsCount": 6,
+      "chosenProject": "Minimal Workflow Engine",
+      "score": 35,
+      "strategy": "TECH_STACK_MATCH",
+      "matchedTechnologies": [
+        "Python"
+      ],
+      "matchedSkills": [],
+      "whyRelevant": "General software engineering inquiry. Candidate's experience building Minimal Workflow Engine showcases core backend engineering, distributed systems, and rapid learning ability."
+    },
+    {
+      "companyName": "Keka",
+      "domain": "keka.com",
+      "industry": "HR Tech",
+      "businessModel": "B2B SaaS",
+      "hasTechSignals": true,
+      "techSignalsCount": 5,
+      "chosenProject": "BullMQ Notification System",
+      "score": 35,
+      "strategy": "TECH_STACK_MATCH",
+      "matchedTechnologies": [
+        "Redis"
+      ],
+      "matchedSkills": [],
+      "whyRelevant": "General software engineering inquiry. Candidate's experience building BullMQ Notification System showcases core backend engineering, distributed systems, and rapid learning ability."
+    },
+    {
+      "companyName": "Linear",
+      "domain": "linear.app",
+      "industry": "Developer Tools",
+      "businessModel": "B2B SaaS",
+      "hasTechSignals": true,
+      "techSignalsCount": 6,
+      "chosenProject": "Survey Platform",
+      "score": 35,
+      "strategy": "TECH_STACK_MATCH",
+      "matchedTechnologies": [
+        "React"
+      ],
+      "matchedSkills": [],
+      "whyRelevant": "General software engineering inquiry. Candidate's experience building Survey Platform showcases core backend engineering, distributed systems, and rapid learning ability."
+    },
+    {
+      "companyName": "Resend",
+      "domain": "resend.com",
+      "industry": "Developer Tools",
+      "businessModel": "B2B SaaS",
+      "hasTechSignals": true,
+      "techSignalsCount": 22,
+      "chosenProject": "Sentinel Gateway",
+      "score": 35,
+      "strategy": "TECH_STACK_MATCH",
+      "matchedTechnologies": [
+        "Node.js"
+      ],
+      "matchedSkills": [],
+      "whyRelevant": "General software engineering inquiry. Candidate's experience building Sentinel Gateway showcases core backend engineering, distributed systems, and rapid learning ability."
+    },
+    {
+      "companyName": "Cloudflare",
+      "domain": "cloudflare.com",
+      "industry": "Cloud Infrastructure & Cybersecurity",
+      "businessModel": "B2B SaaS, Edge Network",
+      "hasTechSignals": true,
+      "techSignalsCount": 6,
+      "chosenProject": "BranchGuard Authorization",
+      "score": 34,
+      "strategy": "BUSINESS_ONLY",
+      "matchedTechnologies": [],
+      "matchedSkills": [
+        "security"
+      ],
+      "whyRelevant": "General software engineering inquiry. Candidate's experience building BranchGuard Authorization showcases core backend engineering, distributed systems, and rapid learning ability."
+    },
+    {
+      "companyName": "Stripe",
+      "domain": "stripe.com",
+      "industry": "Fintech",
+      "businessModel": "Unknown",
+      "hasTechSignals": false,
+      "techSignalsCount": 0,
+      "chosenProject": "Sentinel Gateway",
+      "score": 34,
+      "strategy": "BUSINESS_ONLY",
+      "matchedTechnologies": [],
+      "matchedSkills": [
+        "distributed"
+      ],
+      "whyRelevant": "General software engineering inquiry. Candidate's experience building Sentinel Gateway showcases core backend engineering, distributed systems, and rapid learning ability."
+    },
+    {
+      "companyName": "Happiest Minds",
+      "domain": "happiestminds.com",
+      "industry": "IT Services",
+      "businessModel": "B2B Services",
+      "hasTechSignals": true,
+      "techSignalsCount": 5,
+      "chosenProject": "Minimal Workflow Engine",
+      "score": 27,
+      "strategy": "TECH_STACK_MATCH",
+      "matchedTechnologies": [
+        "Python"
+      ],
+      "matchedSkills": [],
+      "whyRelevant": "General software engineering inquiry. Candidate's experience building Minimal Workflow Engine showcases core backend engineering, distributed systems, and rapid learning ability."
+    },
+    {
+      "companyName": "L&T Technology Services",
+      "domain": "ltts.com",
+      "industry": "Engineering Services",
+      "businessModel": "Enterprise Consulting",
+      "hasTechSignals": true,
+      "techSignalsCount": 5,
+      "chosenProject": "Minimal Workflow Engine",
+      "score": 27,
+      "strategy": "TECH_STACK_MATCH",
+      "matchedTechnologies": [
+        "Python"
+      ],
+      "matchedSkills": [],
+      "whyRelevant": "General software engineering inquiry. Candidate's experience building Minimal Workflow Engine showcases core backend engineering, distributed systems, and rapid learning ability."
+    },
+    {
+      "companyName": "Pinecone",
+      "domain": "pinecone.io",
+      "industry": "Developer Tools / AI",
+      "businessModel": "B2B SaaS",
+      "hasTechSignals": true,
+      "techSignalsCount": 6,
+      "chosenProject": "Minimal Workflow Engine",
+      "score": 27,
+      "strategy": "TECH_STACK_MATCH",
+      "matchedTechnologies": [
+        "Python"
+      ],
+      "matchedSkills": [],
+      "whyRelevant": "General software engineering inquiry. Candidate's experience building Minimal Workflow Engine showcases core backend engineering, distributed systems, and rapid learning ability."
+    },
+    {
+      "companyName": "Wipro",
+      "domain": "wipro.com",
+      "industry": "IT Services / Enterprise Consulting",
+      "businessModel": "Global Consulting",
+      "hasTechSignals": true,
+      "techSignalsCount": 5,
+      "chosenProject": "Minimal Workflow Engine",
+      "score": 27,
+      "strategy": "TECH_STACK_MATCH",
+      "matchedTechnologies": [
+        "Python"
+      ],
+      "matchedSkills": [],
+      "whyRelevant": "General software engineering inquiry. Candidate's experience building Minimal Workflow Engine showcases core backend engineering, distributed systems, and rapid learning ability."
+    },
+    {
+      "companyName": "Fly.io",
+      "domain": "fly.io",
+      "industry": "Cloud Infrastructure",
+      "businessModel": "B2B SaaS, Compute",
+      "hasTechSignals": true,
+      "techSignalsCount": 5,
+      "chosenProject": "Sentinel Gateway",
+      "score": 24,
+      "strategy": "BUSINESS_ONLY",
+      "matchedTechnologies": [],
+      "matchedSkills": [],
+      "whyRelevant": "General software engineering inquiry. Candidate's experience building Sentinel Gateway showcases core backend engineering, distributed systems, and rapid learning ability."
+    },
+    {
+      "companyName": "SourceFuse",
+      "domain": "sourcefuse.com",
+      "industry": "AI & Cloud Services",
+      "businessModel": "B2B Services",
+      "hasTechSignals": false,
+      "techSignalsCount": 0,
+      "chosenProject": "BullMQ Notification System",
+      "score": 24,
+      "strategy": "BUSINESS_ONLY",
+      "matchedTechnologies": [],
+      "matchedSkills": [],
+      "whyRelevant": "General software engineering inquiry. Candidate's experience building BullMQ Notification System showcases core backend engineering, distributed systems, and rapid learning ability."
+    },
+    {
+      "companyName": "PlanetScale",
+      "domain": "planetscale.com",
+      "industry": "Database SaaS",
+      "businessModel": "B2B SaaS, Database",
+      "hasTechSignals": true,
+      "techSignalsCount": 4,
+      "chosenProject": "BullMQ Notification System",
+      "score": 12,
+      "strategy": "BUSINESS_ONLY",
+      "matchedTechnologies": [],
+      "matchedSkills": [],
+      "whyRelevant": "General software engineering inquiry. Candidate's experience building BullMQ Notification System showcases core backend engineering, distributed systems, and rapid learning ability."
+    },
+    {
+      "companyName": "ibhubs.co",
+      "domain": "ibhubs.co",
+      "industry": "Technology",
+      "businessModel": "B2B SaaS",
+      "hasTechSignals": false,
+      "techSignalsCount": 0,
+      "chosenProject": "BullMQ Notification System",
+      "score": 12,
+      "strategy": "BUSINESS_ONLY",
+      "matchedTechnologies": [],
+      "matchedSkills": [],
+      "whyRelevant": "General software engineering inquiry. Candidate's experience building BullMQ Notification System showcases core backend engineering, distributed systems, and rapid learning ability."
+    },
+    {
+      "companyName": "Apollo Hospitals",
+      "domain": "apollohospitals.com",
+      "industry": "Healthcare",
+      "businessModel": "Hospital & Clinical Network",
+      "hasTechSignals": false,
+      "techSignalsCount": 0,
+      "chosenProject": "BullMQ Notification System",
+      "score": 0,
+      "strategy": "BUSINESS_ONLY",
+      "matchedTechnologies": [],
+      "matchedSkills": [],
+      "whyRelevant": "General software engineering inquiry. Candidate's experience building BullMQ Notification System showcases core backend engineering, distributed systems, and rapid learning ability."
+    },
+    {
+      "companyName": "Dr Lal PathLabs",
+      "domain": "lalpathlabs.com",
+      "industry": "Healthcare / Diagnostics",
+      "businessModel": "Pathology Labs",
+      "hasTechSignals": false,
+      "techSignalsCount": 0,
+      "chosenProject": "BullMQ Notification System",
+      "score": 0,
+      "strategy": "BUSINESS_ONLY",
+      "matchedTechnologies": [],
+      "matchedSkills": [],
+      "whyRelevant": "General software engineering inquiry. Candidate's experience building BullMQ Notification System showcases core backend engineering, distributed systems, and rapid learning ability."
+    }
+  ]
+}

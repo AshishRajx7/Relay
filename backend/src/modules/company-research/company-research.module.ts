@@ -14,7 +14,7 @@ import { Crawl4AIProvider } from './providers/crawl4ai.provider';
 import { AtsDiscoveryService } from './services/ats-discovery.service';
 import { ResearchQualityScorerService } from './services/research-quality-scorer.service';
 import { CompanyResearchProcessor } from '../queue/processors/company-research.processor';
-import { QUEUE_COMPANY_RESEARCH, CRAWL_PROVIDER_TOKEN } from '../../common/constants/app.constants';
+import { QUEUE_COMPANY_RESEARCH, QUEUE_DRAFT_GENERATION, CRAWL_PROVIDER_TOKEN } from '../../common/constants/app.constants';
 
 @Module({
   imports: [
@@ -25,9 +25,10 @@ import { QUEUE_COMPANY_RESEARCH, CRAWL_PROVIDER_TOKEN } from '../../common/const
       Prospect,
       Campaign,
     ]),
-    BullModule.registerQueue({
-      name: QUEUE_COMPANY_RESEARCH,
-    }),
+    BullModule.registerQueue(
+      { name: QUEUE_COMPANY_RESEARCH },
+      { name: QUEUE_DRAFT_GENERATION },
+    ),
   ],
   controllers: [CompanyResearchController],
   providers: [

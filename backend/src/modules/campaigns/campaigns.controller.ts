@@ -69,6 +69,14 @@ export class CampaignsController {
     return this.campaignsService.retryFailedProspects(id);
   }
 
+  @Post(':id/start')
+  @ApiOperation({ summary: 'Start campaign processing (auto-chaining research -> drafts -> gmail drafts)' })
+  @ApiParam({ name: 'id', description: 'Campaign UUID' })
+  @ApiResponse({ status: 200, description: 'Campaign started' })
+  async startCampaign(@Param('id', ParseUUIDPipe) id: string): Promise<{ campaignId: string; status: string; message: string }> {
+    return this.campaignsService.startCampaign(id);
+  }
+
   @Post(':id/upload')
   @ApiOperation({ summary: 'Upload a CSV or PDF file with prospect contacts into a campaign' })
   @ApiParam({ name: 'id', description: 'Campaign UUID' })

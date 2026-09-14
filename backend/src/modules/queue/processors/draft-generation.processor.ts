@@ -1,11 +1,18 @@
-import { Processor, WorkerHost } from '@nestjs/bullmq';
+import { Processor, WorkerHost, InjectQueue } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
-import { Job } from 'bullmq';
+import { Job, Queue } from 'bullmq';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { QUEUE_DRAFT_GENERATION, JOB_GENERATE_DRAFT } from '../../../common/constants/app.constants';
+import {
+  QUEUE_DRAFT_GENERATION,
+  JOB_GENERATE_DRAFT,
+  JOB_GENERATE_DRAFTS,
+  QUEUE_GMAIL_DRAFT,
+  JOB_CREATE_GMAIL_DRAFT,
+} from '../../../common/constants/app.constants';
 import {
   Prospect,
+  ProspectResearchStatus,
   ProspectDraftStatus,
   ProspectFailureType,
 } from '../../prospects/entities/prospect.entity';
@@ -40,17 +47,66 @@ export class DraftGenerationProcessor extends WorkerHost {
     @InjectRepository(EmailDraftVariant)
     private readonly variantRepository: Repository<EmailDraftVariant>,
     private readonly emailGenerationService: EmailGenerationService,
+    @InjectQueue(QUEUE_DRAFT_GENERATION)
+    private readonly draftQueue: Queue,
+    @InjectQueue(QUEUE_GMAIL_DRAFT)
+    private readonly gmailQueue: Queue,
   ) {
     super();
   }
 
   async process(job: Job<any, any, string>): Promise<any> {
-    this.logger.log(`[DraftGenerationProcessor] Processing job ${job.id} for prospect ID: ${job.data.prospectId}`);
+    if (job.name === JOB_GENERATE_DRAFTS) {
+      const { campaignId } = job.data;
+      this.logger.log(`[DraftGenerationProcessor] Processing campaign-level draft generation for campaign ID: ${campaignId}`);
+      const campaign = await this.campaignRepository.findOne({ where: { id: campaignId } });
+      if (!campaign) {
+        throw new Error(`Campaign with ID ${campaignId} not found`);
+      }
+
+      const prospects = await this.prospectRepository.find({
+        where: [
+          { campaignId, researchStatus: ProspectResearchStatus.RESEARCHED },
+          { campaignId, researchStatus: ProspectResearchStatus.MANUAL_REVIEW },
+        ],
+      });
+
+      let queuedCount = 0;
+      for (const prospect of prospects) {
+        if (
+          prospect.draftStatus !== ProspectDraftStatus.GENERATED &&
+          prospect.draftStatus !== ProspectDraftStatus.APPROVED &&
+          prospect.draftStatus !== ProspectDraftStatus.GMAIL_DRAFT_CREATED
+        ) {
+          queuedCount++;
+          await this.draftQueue.add(
+            JOB_GENERATE_DRAFT,
+            {
+              prospectId: prospect.id,
+              candidateProfileId: campaign.candidateProfileId,
+            },
+            {
+              jobId: `draft-gen-${prospect.id}`,
+              attempts: 3,
+              backoff: { type: 'exponential', delay: 3000 },
+              removeOnComplete: true,
+            },
+          );
+        }
+      }
+
+      this.logger.log(
+        `[DraftGenerationProcessor] Auto-enqueued ${queuedCount} individual draft generation jobs for campaign "${campaign.name}"`
+      );
+      return { queuedCount, campaignId };
+    }
 
     if (job.name !== JOB_GENERATE_DRAFT) {
       this.logger.warn(`Unknown job name: ${job.name}`);
       return null;
     }
+
+    this.logger.log(`[DraftGenerationProcessor] Processing job ${job.id} for prospect ID: ${job.data.prospectId}`);
 
     const { prospectId, candidateProfileId } = job.data;
 
@@ -79,12 +135,11 @@ export class DraftGenerationProcessor extends WorkerHost {
       throw new Error(`Candidate profile not found`);
     }
 
-    // Safety check: If company research score < 40, stop generation
+    // Notice: If company research score < 40, log notice and generate using calibrated LOW_MATCH / generic tier
     if ((prospect.companyProfile.researchScore || 0) < 40) {
-      this.logger.warn(`Company research score for ${prospect.domain} is < 40 (${prospect.companyProfile.researchScore}). Flagging manual review.`);
-      prospect.draftStatus = ProspectDraftStatus.REVIEW_REQUIRED;
-      await this.prospectRepository.save(prospect);
-      return { prospectId, status: 'MANUAL_REVIEW_REQUIRED' };
+      this.logger.log(
+        `Company research score for ${prospect.domain} is < 40 (${prospect.companyProfile.researchScore}). Proceeding with outreach generation using calibrated personalization tier.`,
+      );
     }
 
     try {
@@ -98,7 +153,7 @@ export class DraftGenerationProcessor extends WorkerHost {
         candidate,
       );
 
-      // Save EmailDraft
+      // Save EmailDraft (Auto-approved for seamless automated pipeline)
       let draft = await this.emailDraftRepository.findOne({ where: { prospectId: prospect.id } });
       if (!draft) {
         draft = this.emailDraftRepository.create({ prospectId: prospect.id });
@@ -106,9 +161,7 @@ export class DraftGenerationProcessor extends WorkerHost {
 
       draft.subject = result.subject;
       draft.body = result.body;
-      draft.status = result.quality.requiresManualReview
-        ? OutreachDraftStatus.REVIEW_REQUIRED
-        : OutreachDraftStatus.GENERATED;
+      draft.status = OutreachDraftStatus.APPROVED;
 
       const savedDraft = await this.emailDraftRepository.save(draft);
 
@@ -161,10 +214,8 @@ export class DraftGenerationProcessor extends WorkerHost {
         await this.variantRepository.save(variantEntity);
       }
 
-      // Update prospect draft status
-      prospect.draftStatus = result.quality.requiresManualReview
-        ? ProspectDraftStatus.REVIEW_REQUIRED
-        : ProspectDraftStatus.GENERATED;
+      // Update prospect draft status (Auto-approved for seamless automated pipeline)
+      prospect.draftStatus = ProspectDraftStatus.APPROVED;
       prospect.failureType = null;
       await this.prospectRepository.save(prospect);
 
@@ -181,6 +232,21 @@ export class DraftGenerationProcessor extends WorkerHost {
       this.logger.log(
         `Draft generated for ${prospect.email} | Selected: ${result.selectedVariantType} | ` +
         `Quality Score: ${result.quality.confidenceScore}/100 | Status: ${draft.status}`
+      );
+
+      // Task 3: Auto-chain Draft Generation -> Gmail Draft Creation
+      await this.gmailQueue.add(
+        JOB_CREATE_GMAIL_DRAFT,
+        { draftId: savedDraft.id },
+        {
+          jobId: `gmail-draft-${savedDraft.id}`,
+          attempts: 3,
+          backoff: { type: 'exponential', delay: 3000 },
+          removeOnComplete: true,
+        },
+      );
+      this.logger.log(
+        `[DraftGenerationProcessor] Auto-enqueued Gmail draft creation for draft ID ${savedDraft.id} (${prospect.email})`
       );
 
       return {
