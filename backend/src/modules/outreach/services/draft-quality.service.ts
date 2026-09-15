@@ -167,22 +167,69 @@ export class DraftQualityService {
   }
 
   public static readonly FORBIDDEN_OUTREACH_PHRASES: string[] = [
-    "i'd love to chat",
+    // V5 Absolutely Forbidden Phrases
+    "caught my attention",
+    "aligns with my experience",
+    "aligns with my background",
+    "aligns with",
+    "relevant to my experience",
+    "relevant to my background",
+    "very relevant",
+    "directly relevant",
+    "particularly drawn to",
+    "resonates with me",
+    "resonates with how",
+    "resonates with",
+    "excited about",
+    "reaching out regarding",
+    "reaching out about",
+    "would appreciate consideration",
+    "current or future opportunities",
+    "current or future openings",
+    "current or future",
+    "current and future",
+    "backend openings",
+    "engineering openings",
+    "opportunity to discuss",
+    "would love to chat",
     "let's connect",
+    "happy to connect",
+    "happy to chat",
+    "introductory conversation",
+    "brief call",
+    "quick call",
+    "coffee chat",
+    "explore synergies",
+    "looking forward to hearing from you",
+
+    // V5 AI Writing Patterns
+    "additionally",
+    "furthermore",
+    "moreover",
+    "notably",
+    "importantly",
+    "in my current role",
+    "i have had the opportunity to",
+    "i've had the opportunity to",
+    "i have owned and maintained",
+    "i've owned and maintained",
+    "i have successfully",
+    "i am particularly interested in",
+    "i'm particularly interested in",
+    "i am excited to apply",
+    "i'm excited to apply",
+    "i am writing to express interest",
+    "i'm writing to express interest",
+
+    // Older AI & networking cliches
+    "i'd love to chat",
     "i'd love to discuss your roadmap",
     "let's discuss architecture",
-    "if you're looking for someone",
-    "i can help you",
-    "i can support your growth",
-    "i'd love to share ideas",
     "happy to brainstorm",
     "thought i'd reach out",
     "would love your thoughts",
-    "explore synergies",
     "i'm impressed by",
     "i am impressed by",
-    "i'm excited about",
-    "i am excited about",
     "i admire",
     "i've been following",
     "i have been following",
@@ -199,23 +246,16 @@ export class DraftQualityService {
     "revolutionary",
     "i'm inspired by",
     "i am inspired by",
-    "additionally",
-    "furthermore",
-    "notably",
-    "i've had the opportunity to",
-    "i had the opportunity to",
     "i've observed that",
     "i observed that",
     "my experience aligns with",
-    "i've owned and maintained",
-    "i owned and maintained",
-    "i'm particularly drawn to",
-    "i am particularly drawn to",
-    "i've built and maintained several production systems",
-    "built and maintained several production systems",
     "goklaim",
     "final year student",
     "pursuing degree",
+    "vit chennai",
+    "july 2026",
+    "graduated",
+    "cgpa",
   ];
 
   public static readonly MANDATORY_SUBJECT_KEYWORDS: string[] = [
@@ -314,25 +354,32 @@ export class DraftQualityService {
     return null;
   }
 
+  public hasForbiddenCta(body: string): boolean {
+    if (!body) return false;
+    const lower = body.toLowerCase();
+    const pattern = /\b(?:(?:open\s+to|time\s+for|schedule|grab)\s+(?:a\s+)?(?:call|chat|coffee|meeting|conversation)|(?:hop\s+on\s+a\s+call)|(?:let\s+me\s+know\s+if\s+you(?:'d|\s+would)?\s+be\s+open)|(?:look(?:ing)?\s+forward\s+to\s+hearing)|(?:would\s+love\s+to\s+(?:talk|chat|connect|speak))|(?:happy\s+to\s+talk)|(?:brief\s+call)|(?:quick\s+call)|(?:coffee\s+chat)|(?:introductory\s+conversation)|(?:introductory\s+call)|(?:would\s+appreciate\s+consideration)|(?:opportunity\s+to\s+discuss))\b/i;
+    return pattern.test(lower);
+  }
+
   public hasRoleIntent(body: string): boolean {
     if (!body) return false;
     const lower = body.toLowerCase();
-    const pattern = /\b(?:interested\s+in\s+(?:[a-z0-9_-]+\s+)*(?:opportunities|roles?|openings?|positions?|engineering)|seeking\s+(?:[a-z0-9_-]+\s+)*(?:roles?|opportunities|positions?|openings?)|(?:backend|software|frontend|fullstack|full-stack|systems?|platform|devops)\s+(?:engineering|developer)\s+(?:opportunities|roles?|positions?|openings?)|explore\s+opportunities\s+within\s+your\s+engineering|(?:engineering|developer)\s+openings?|opportunities\s+at\s+[a-z0-9_-]+)\b/i;
-    return pattern.test(lower);
+    const rolePattern = /\b(?:backend|software|systems?|platform)\s+engineer\b/i;
+    const companyPattern = /the\s+ninja\s+studio/i;
+    return rolePattern.test(lower) && companyPattern.test(lower);
   }
 
   public hasResumeMention(body: string): boolean {
     if (!body) return false;
     const lower = body.toLowerCase();
-    const pattern = /\b(?:(?:attached\s+(?:is\s+)?(?:my\s+)?resume)|(?:resume\s+(?:is\s+)?attached)|(?:attached\s+my\s+cv)|(?:my\s+resume\s+is\s+attached)|(?:find\s+attached\s+my\s+resume)|(?:i've\s+attached\s+my\s+resume)|(?:have\s+attached\s+my\s+resume)|(?:i\s+have\s+attached\s+my\s+resume))\b/i;
+    const pattern = /\b(?:(?:attached\s+(?:is\s+)?(?:my\s+)?resume)|(?:resume\s+(?:is\s+)?attached)|(?:attached\s+my\s+cv)|(?:my\s+resume\s+is\s+attached)|(?:find\s+attached\s+my\s+resume)|(?:i've\s+attached\s+my\s+resume)|(?:have\s+attached\s+my\s+resume)|(?:i\s+have\s+attached\s+my\s+resume)|(?:attached\s+my\s+resume\s+for\s+review)|(?:attached\s+my\s+resume\s+in\s+case)|(?:attached\s+my\s+resume\s+below)|(?:attached\s+my\s+resume\s+here)|(?:resume\s+is\s+attached\s+below))\b/i;
     return pattern.test(lower);
   }
 
   public hasApplicationCta(body: string): boolean {
     if (!body) return false;
-    const lower = body.toLowerCase();
-    const pattern = /\b(?:consideration\s+for|considered\s+for|opportunity\s+to\s+discuss|discuss\s+whether\s+my\s+background|chance\s+to\s+be\s+considered|discuss\s+(?:a\s+)?fit\s+for|explore\s+opportunities\s+within\s+your\s+engineering)\b/i;
-    return pattern.test(lower);
+    // In V5, clean CTA means resume is mentioned AND no forbidden call/meeting requests are made
+    return this.hasResumeMention(body) && !this.hasForbiddenCta(body);
   }
 
   public hasNetworkingTone(body: string): boolean {
@@ -351,7 +398,7 @@ export class DraftQualityService {
 
   /**
    * Evaluates draft quality across 5 dimensions and applies hard safety rejection rules.
-   * Calibrated for Relay Outreach V2 to optimize interview conversion rate.
+   * Calibrated for Relay Outreach V5 to optimize interview conversion rate.
    */
   public evaluateDraft(
     subject: string,
@@ -364,7 +411,7 @@ export class DraftQualityService {
     const companyNameLower = company?.companyName ? company.companyName.toLowerCase() : '';
 
     // 1. Personalization Score (0-100)
-    // V4 Rule: Company content is strictly < 20% of email (1 sentence). Candidate is > 80%.
+    // V5 Rule: Conversational company sentence (1 sentence). Candidate is > 80%.
     let personalizationScore = 40;
     if (companyNameLower && lowerBody.includes(companyNameLower)) personalizationScore += 30; // Mentions company
     if (company?.products && company.products.some((p) => lowerBody.includes(p.toLowerCase()))) {
@@ -387,10 +434,10 @@ export class DraftQualityService {
       }
     }
     const wordCount = body.split(/\s+/).filter(Boolean).length;
-    if (wordCount > 140) {
+    if (wordCount > 100) {
       spamRiskScore += 20;
       flags.push('EXCESSIVE_WORD_COUNT');
-    } else if (wordCount < 60) {
+    } else if (wordCount < 50) {
       flags.push('TOO_SHORT');
     }
 
@@ -552,10 +599,12 @@ export class DraftQualityService {
     // forbidden phrases, missing job intent, or networking/consulting tone.
     const requiresManualReview =
       spamRiskScore > 30 ||
-      wordCount > 140 ||
+      wordCount > 100 ||
       hasGroundingViolation ||
       Boolean(forbiddenPhrase) ||
       !roleIntentPresent ||
+      !resumeMentioned ||
+      this.hasForbiddenCta(body) ||
       networkingTone ||
       consultingTone;
 

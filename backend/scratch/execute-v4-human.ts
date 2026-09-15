@@ -11,11 +11,12 @@ import { EmailDraftVariant, EmailVariantType } from '../src/modules/outreach/ent
 import { EmailGenerationService } from '../src/modules/outreach/services/email-generation.service';
 import { GmailDraftService, EmailAttachment } from '../src/modules/outreach/services/gmail-draft.service';
 import { DraftQualityService } from '../src/modules/outreach/services/draft-quality.service';
+import { StorageService } from '../src/modules/storage/storage.service';
 import * as fs from 'fs';
 
 async function main() {
   console.log('================================================================');
-  console.log('🚀 RELAY OUTREACH V4 — HUMAN-LIKE JOB APPLICATION EMAILS');
+  console.log('🚀 RELAY OUTREACH V4 — CRITICAL HUMANIZATION RULES EXECUTION');
   console.log('================================================================\n');
 
   const app = await NestFactory.createApplicationContext(AppModule, { logger: ['error', 'warn'] });
@@ -29,6 +30,7 @@ async function main() {
   const emailGenService = app.get<EmailGenerationService>(EmailGenerationService);
   const gmailDraftService = app.get<GmailDraftService>(GmailDraftService);
   const draftQualityService = app.get<DraftQualityService>(DraftQualityService);
+  const storageService = app.get<StorageService>(StorageService);
 
   const candidate = await candidateProfileRepo.findOne({
     where: { name: 'Ashish Raj' },
@@ -39,39 +41,51 @@ async function main() {
   if (!candidate) throw new Error('Candidate Ashish Raj not found');
 
   let attachment: EmailAttachment | undefined;
-  if (candidate.resumeFile?.storagePath && fs.existsSync(candidate.resumeFile.storagePath)) {
-    attachment = {
-      filename: `Resume - ${candidate.name}.pdf`,
-      content: fs.readFileSync(candidate.resumeFile.storagePath),
-      contentType: 'application/pdf',
-    };
+  if (candidate.resumeFile?.storagePath) {
+    try {
+      const fileBuffer = await storageService.readFile(candidate.resumeFile.storagePath);
+      attachment = {
+        filename: `Resume - ${candidate.name}.pdf`,
+        content: fileBuffer,
+        contentType: 'application/pdf',
+      };
+      console.log(`✅ Loaded resume PDF attachment: "${attachment.filename}" (${attachment.content.length} bytes)`);
+    } catch (err: any) {
+      console.warn(`⚠️ Warning: could not load resume PDF via storageService: ${err.message}`);
+    }
   }
 
-  // Fetch all 9 drafts
-  const existingDrafts = await emailDraftRepo
-    .createQueryBuilder('draft')
-    .leftJoinAndSelect('draft.prospect', 'prospect')
-    .leftJoinAndSelect('prospect.companyProfile', 'companyProfile')
-    .where('draft.status = :status', { status: OutreachDraftStatus.GMAIL_DRAFT_CREATED })
-    .orderBy('draft.updatedAt', 'DESC')
-    .limit(9)
-    .getMany();
+  // Fetch all existing drafts and group by unique prospect email
+  const allDrafts = await emailDraftRepo.find({
+    relations: ['prospect', 'prospect.companyProfile'],
+    order: { createdAt: 'DESC' },
+  });
 
-  console.log(`Processing ${existingDrafts.length} targets with V4 Human-Like Generation...\n`);
+  const prospectMap = new Map<string, { prospect: Prospect; draft: EmailDraft }>();
+  for (const d of allDrafts) {
+    if (d.prospect && d.prospect.email && !d.prospect.email.includes('system_') && !d.prospect.email.includes('alerts_') && !d.prospect.email.includes('noreply_')) {
+      if (!prospectMap.has(d.prospect.email)) {
+        prospectMap.set(d.prospect.email, { prospect: d.prospect, draft: d });
+      }
+    }
+  }
+
+  const targets = Array.from(prospectMap.values());
+  console.log(`Processing ${targets.length} distinct targets with Rotated Humanization Rules...\n`);
 
   const results: any[] = [];
 
-  for (const draft of existingDrafts) {
-    const prospect = draft.prospect;
+  for (let i = 0; i < targets.length; i++) {
+    const { prospect, draft } = targets[i];
     const company = prospect.companyProfile || {
       companyName: prospect.companyName || prospect.domain,
       domain: prospect.domain,
     } as any;
 
     console.log(`----------------------------------------------------------------`);
-    console.log(`Generating V4 Email for: ${prospect.email} (${company.companyName})`);
+    console.log(`[Target ${i + 1}/${targets.length}] Generating V5 Human Email for: ${prospect.email} (${company.companyName}) [Style Index: ${i % 10}]`);
 
-    const draftResult = await emailGenService.generatePersonalizedDraft(prospect, company, candidate);
+    const draftResult = await emailGenService.generatePersonalizedDraft(prospect, company, candidate, { styleIndex: i });
 
     // Overwrite EmailDraft in DB
     draft.subject = draftResult.subject;
@@ -119,19 +133,25 @@ async function main() {
       await variantRepo.save(vEntity);
     }
 
-    // Sync to live Gmail Draft (preserving existing ID)
-    if (savedDraft.gmailDraftId && attachment) {
-      console.log(`  Updating Gmail Draft ${savedDraft.gmailDraftId}...`);
-      await gmailDraftService.createOrUpdateDraft(
-        savedDraft.id,
-        prospect.email,
-        savedDraft.subject,
-        savedDraft.body,
-        candidate.id,
-        attachment,
-        savedDraft.gmailDraftId,
-      );
-      console.log(`  ✅ Synced to Gmail with preserved ID: ${savedDraft.gmailDraftId}`);
+    // Sync to live Gmail Draft (preserving existing ID or creating if none)
+    try {
+      if (attachment) {
+        console.log(`  Syncing to Gmail Draft (current ID: ${savedDraft.gmailDraftId || 'none'})...`);
+        const gmailRes = await gmailDraftService.createOrUpdateDraft(
+          savedDraft.id,
+          prospect.email,
+          savedDraft.subject,
+          savedDraft.body,
+          candidate.id,
+          attachment,
+          savedDraft.gmailDraftId || undefined,
+        );
+        savedDraft.gmailDraftId = gmailRes.gmailDraftId;
+        await emailDraftRepo.save(savedDraft);
+        console.log(`  ✅ Synced to Gmail with ID: ${savedDraft.gmailDraftId}`);
+      }
+    } catch (err: any) {
+      console.warn(`  ⚠️ Gmail sync error for ${prospect.email}: ${err.message}`);
     }
 
     const wordCount = savedDraft.body.split(/\s+/).filter(Boolean).length;
@@ -147,13 +167,13 @@ async function main() {
   }
 
   console.log('\n================================================================');
-  console.log('📊 V4 HUMAN-LIKE APPLICATION GENERATION RESULTS');
+  console.log('📊 RELAY OUTREACH V5 — HUMAN ENGINEER EMAIL RESULTS');
   console.log('================================================================\n');
 
   for (const r of results) {
     console.log(`[${r.company}] ${r.email}`);
     console.log(`  Subject:    ${r.subject}`);
-    console.log(`  Word Count: ${r.wordCount} words (Target: 70-120, Max: 140)`);
+    console.log(`  Word Count: ${r.wordCount} words (Target: 55-90, Max: 100)`);
     console.log(`  Gmail ID:   ${r.gmailDraftId}`);
     console.log(`  Body:\n${r.body}\n`);
     console.log('----------------------------------------------------------------\n');
