@@ -167,7 +167,18 @@ export class DraftQualityService {
   }
 
   public static readonly FORBIDDEN_OUTREACH_PHRASES: string[] = [
-    // V5 Absolutely Forbidden Phrases
+    // V6.1 Absolutely Forbidden Content
+    "saw what you're building",
+    "job openings",
+    "backend openings",
+    "engineering openings",
+    "current or future opportunities",
+    "current or future openings",
+    "current or future",
+    "current and future",
+    "would appreciate consideration",
+    "reaching out regarding",
+    "reaching out about",
     "caught my attention",
     "aligns with my experience",
     "aligns with my background",
@@ -181,20 +192,21 @@ export class DraftQualityService {
     "resonates with how",
     "resonates with",
     "excited about",
-    "reaching out regarding",
-    "reaching out about",
-    "would appreciate consideration",
-    "current or future opportunities",
-    "current or future openings",
-    "current or future",
-    "current and future",
-    "backend openings",
-    "engineering openings",
     "opportunity to discuss",
+    "conversation",
+    "call",
+    "meeting",
+    "chat",
+    "connect",
+    "follow up",
+    "circle back",
+    "touch base",
     "would love to chat",
+    "love to chat",
     "let's connect",
     "happy to connect",
     "happy to chat",
+    "thank you for your time",
     "introductory conversation",
     "brief call",
     "quick call",
@@ -259,15 +271,14 @@ export class DraftQualityService {
   ];
 
   public static readonly MANDATORY_SUBJECT_KEYWORDS: string[] = [
-    'application',
-    'opportunity',
     'engineer',
     'engineering',
     'developer',
     'software',
     'backend',
-    'role',
-    'position',
+    'resume',
+    'ashish',
+    'raj',
   ];
 
   public static readonly FORBIDDEN_SUBJECT_PATTERNS: RegExp[] = [
@@ -282,6 +293,12 @@ export class DraftQualityService {
     /\bquick introduction\b/i,
     /\binterested in connecting\b/i,
     /\blet's talk\b/i,
+    /\bapplication\b/i,
+    /\bopportunit(?:y|ies)\b/i,
+    /\bjob\s+inquiry\b/i,
+    /\bseeking\b/i,
+    /\bposition\b/i,
+    /\bexploring\b/i,
   ];
 
   public static hasMandatorySubjectKeyword(subject: string): boolean {
@@ -357,14 +374,25 @@ export class DraftQualityService {
   public hasForbiddenCta(body: string): boolean {
     if (!body) return false;
     const lower = body.toLowerCase();
-    const pattern = /\b(?:(?:open\s+to|time\s+for|schedule|grab)\s+(?:a\s+)?(?:call|chat|coffee|meeting|conversation)|(?:hop\s+on\s+a\s+call)|(?:let\s+me\s+know\s+if\s+you(?:'d|\s+would)?\s+be\s+open)|(?:look(?:ing)?\s+forward\s+to\s+hearing)|(?:would\s+love\s+to\s+(?:talk|chat|connect|speak))|(?:happy\s+to\s+talk)|(?:brief\s+call)|(?:quick\s+call)|(?:coffee\s+chat)|(?:introductory\s+conversation)|(?:introductory\s+call)|(?:would\s+appreciate\s+consideration)|(?:opportunity\s+to\s+discuss))\b/i;
+    const pattern = /\b(?:(?:open\s+to|time\s+for|schedule|grab)\s+(?:a\s+)?(?:call|chat|coffee|meeting|conversation)|(?:hop\s+on\s+a\s+call)|(?:let\s+me\s+know\s+if\s+you(?:'d|\s+would)?\s+be\s+open)|(?:look(?:ing)?\s+forward\s+to\s+hearing)|(?:would\s+love\s+to\s+(?:talk|chat|connect|speak))|(?:happy\s+to\s+talk)|(?:brief\s+call)|(?:quick\s+call)|(?:coffee\s+chat)|(?:introductory\s+conversation)|(?:introductory\s+call)|(?:would\s+appreciate\s+consideration)|(?:opportunity\s+to\s+discuss)|(?:follow\s+up)|(?:circle\s+back)|(?:touch\s+base))\b/i;
     return pattern.test(lower);
+  }
+
+  public static hasSignatureOrClosingSentence(body: string): boolean {
+    if (!body) return false;
+    const paragraphs = body.split(/\n\s*\n/).filter(Boolean);
+    if (paragraphs.length !== 4) return true; // V6.1 requires exactly 4 paragraphs
+    const lastP = paragraphs[3].trim();
+    const validEndings = ['Resume attached.', "I've attached my resume.", 'Attached my resume.'];
+    if (!validEndings.includes(lastP)) return true;
+    return /\b(?:thank\s+you|thanks|best\s+regards|best,|regards,|cheers|sincerely)\b/i.test(body);
   }
 
   public hasRoleIntent(body: string): boolean {
     if (!body) return false;
     const lower = body.toLowerCase();
-    const rolePattern = /\b(?:backend|software|systems?|platform)\s+engineer\b/i;
+    const rolePattern =
+      /\b(?:(?:backend|software|systems?|platform)\s+(?:engineer|systems?|services?|infrastructure|apis?)|work\s+on\s+backend|building\s+(?:backend\s+)?apis?|databases?\s+and\s+(?:internal\s+)?services?)\b/i;
     const companyPattern = /the\s+ninja\s+studio/i;
     return rolePattern.test(lower) && companyPattern.test(lower);
   }
@@ -378,8 +406,8 @@ export class DraftQualityService {
 
   public hasApplicationCta(body: string): boolean {
     if (!body) return false;
-    // In V5, clean CTA means resume is mentioned AND no forbidden call/meeting requests are made
-    return this.hasResumeMention(body) && !this.hasForbiddenCta(body);
+    // In V6.1, clean CTA means resume is mentioned, no forbidden call/meeting requests, and no signature block
+    return this.hasResumeMention(body) && !this.hasForbiddenCta(body) && !DraftQualityService.hasSignatureOrClosingSentence(body);
   }
 
   public hasNetworkingTone(body: string): boolean {
@@ -398,7 +426,7 @@ export class DraftQualityService {
 
   /**
    * Evaluates draft quality across 5 dimensions and applies hard safety rejection rules.
-   * Calibrated for Relay Outreach V5 to optimize interview conversion rate.
+   * Calibrated for Relay Outreach V6.1 to optimize human engineer tone and application replies.
    */
   public evaluateDraft(
     subject: string,
@@ -411,7 +439,7 @@ export class DraftQualityService {
     const companyNameLower = company?.companyName ? company.companyName.toLowerCase() : '';
 
     // 1. Personalization Score (0-100)
-    // V5 Rule: Conversational company sentence (1 sentence). Candidate is > 80%.
+    // V6.1 Rule: Conversational observational company sentence. Candidate is > 80%.
     let personalizationScore = 40;
     if (companyNameLower && lowerBody.includes(companyNameLower)) personalizationScore += 30; // Mentions company
     if (company?.products && company.products.some((p) => lowerBody.includes(p.toLowerCase()))) {
@@ -434,11 +462,20 @@ export class DraftQualityService {
       }
     }
     const wordCount = body.split(/\s+/).filter(Boolean).length;
-    if (wordCount > 100) {
-      spamRiskScore += 20;
+    if (wordCount > 95) {
+      spamRiskScore += 25;
       flags.push('EXCESSIVE_WORD_COUNT');
     } else if (wordCount < 50) {
+      spamRiskScore += 25;
       flags.push('TOO_SHORT');
+    }
+
+    const paragraphs = body.split(/\n\s*\n/).filter(Boolean);
+    if (paragraphs.length !== 4) {
+      flags.push('INVALID_PARAGRAPH_COUNT');
+    }
+    if (DraftQualityService.hasSignatureOrClosingSentence(body)) {
+      flags.push('FORBIDDEN_SIGNATURE_OR_CLOSING');
     }
 
     // 4. Technical Alignment Score (0-100)
@@ -599,7 +636,10 @@ export class DraftQualityService {
     // forbidden phrases, missing job intent, or networking/consulting tone.
     const requiresManualReview =
       spamRiskScore > 30 ||
-      wordCount > 100 ||
+      wordCount > 95 ||
+      wordCount < 50 ||
+      paragraphs.length !== 4 ||
+      DraftQualityService.hasSignatureOrClosingSentence(body) ||
       hasGroundingViolation ||
       Boolean(forbiddenPhrase) ||
       !roleIntentPresent ||

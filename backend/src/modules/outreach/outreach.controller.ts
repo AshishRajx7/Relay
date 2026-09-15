@@ -5,6 +5,7 @@ import {
   Patch,
   Param,
   Body,
+  Query,
   ParseUUIDPipe,
 } from '@nestjs/common';
 import {
@@ -12,10 +13,11 @@ import {
   ApiOperation,
   ApiResponse,
   ApiParam,
+  ApiQuery,
   ApiBody,
 } from '@nestjs/swagger';
 import { OutreachService, UpdateDraftDto } from './outreach.service';
-import { EmailDraft } from './entities/email-draft.entity';
+import { EmailDraft, OutreachDraftStatus } from './entities/email-draft.entity';
 import { EmailVariantType } from './entities/email-draft-variant.entity';
 import { GmailDraftResult } from './services/gmail-draft.service';
 
@@ -52,6 +54,18 @@ export class OutreachController {
     @Param('id', ParseUUIDPipe) campaignId: string,
   ): Promise<{ campaignId: string; draftsQueued: number; alreadyCreated: number; failed: number }> {
     return this.outreachService.createGmailDraftsForCampaign(campaignId);
+  }
+
+  @Get('drafts')
+  @ApiOperation({ summary: 'List all drafts globally with optional campaignId and status filtering' })
+  @ApiQuery({ name: 'campaignId', required: false, description: 'Optional Campaign UUID' })
+  @ApiQuery({ name: 'status', required: false, enum: OutreachDraftStatus, description: 'Optional draft status' })
+  @ApiResponse({ status: 200, description: 'List of drafts', type: [EmailDraft] })
+  async getDrafts(
+    @Query('campaignId') campaignId?: string,
+    @Query('status') status?: OutreachDraftStatus,
+  ): Promise<EmailDraft[]> {
+    return this.outreachService.findAllDrafts(campaignId, status);
   }
 
   @Get('drafts/:id')

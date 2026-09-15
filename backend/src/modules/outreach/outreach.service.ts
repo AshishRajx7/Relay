@@ -113,6 +113,29 @@ export class OutreachService {
   }
 
   /**
+   * Lists all drafts globally with optional campaign and status filters.
+   */
+  async findAllDrafts(campaignId?: string, status?: OutreachDraftStatus): Promise<EmailDraft[]> {
+    const qb = this.emailDraftRepository
+      .createQueryBuilder('draft')
+      .innerJoinAndSelect('draft.prospect', 'prospect')
+      .leftJoinAndSelect('prospect.companyProfile', 'companyProfile')
+      .leftJoinAndSelect('draft.reasoning', 'reasoning')
+      .leftJoinAndSelect('draft.quality', 'quality')
+      .leftJoinAndSelect('draft.variants', 'variants')
+      .orderBy('draft.created_at', 'DESC');
+
+    if (campaignId) {
+      qb.andWhere('prospect.campaign_id = :campaignId', { campaignId });
+    }
+    if (status) {
+      qb.andWhere('draft.status = :status', { status });
+    }
+
+    return qb.getMany();
+  }
+
+  /**
    * Finds a single draft by ID with all relations.
    */
   async findDraftById(id: string): Promise<EmailDraft> {

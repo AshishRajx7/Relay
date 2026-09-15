@@ -237,50 +237,27 @@ export class EmailGenerationService {
     }
 
     const openingStyles = [
-      `${greetingGuideline}\n\nI'm Ashish, a backend engineer working on distributed services at The Ninja Studio.`,
-      `${greetingGuideline}\n\nMy name is Ashish and I work on backend systems and infrastructure at The Ninja Studio.`,
-      `${greetingGuideline}\n\nI'm a software engineer at The Ninja Studio focused on backend systems and databases.`,
-      `${greetingGuideline}\n\nI've been working on backend services and queue infrastructure at The Ninja Studio.`,
-      `${greetingGuideline}\n\nI'm Ashish, currently building distributed backend services and APIs at The Ninja Studio.`,
-      `${greetingGuideline}\n\nI build backend systems and distributed services at The Ninja Studio.`,
-      `${greetingGuideline}\n\nI'm a backend engineer building scalable data pipelines and backend systems at The Ninja Studio.`,
-      `${greetingGuideline}\n\nI'm Ashish, a software engineer building core backend infrastructure at The Ninja Studio.`,
-      `${greetingGuideline}\n\nI work on backend systems, APIs, and database performance at The Ninja Studio.`,
-      `${greetingGuideline}\n\nI've spent the past year building backend systems and services at The Ninja Studio.`,
+      `${greetingGuideline} I'm Ashish. I work on backend systems and distributed services at The Ninja Studio here in India.`,
+      `${greetingGuideline} I'm Ashish. Most of my work over the past year has been around databases and platform infrastructure at The Ninja Studio.`,
+      `${greetingGuideline} I'm Ashish. I spend my time building backend services, database layers, and internal APIs at The Ninja Studio.`,
+      `${greetingGuideline} I'm Ashish. I've been working on backend systems and queue infrastructure at The Ninja Studio for the past year.`,
+      `${greetingGuideline} I'm Ashish. I spend my time building backend APIs and database infrastructure at The Ninja Studio.`,
+      `${greetingGuideline} I'm Ashish. I work on backend systems, data pipelines, and distributed services at The Ninja Studio.`,
+      `${greetingGuideline} I'm Ashish. Most of my work involves building backend services, APIs, and cloud infrastructure at The Ninja Studio.`,
+      `${greetingGuideline} I'm Ashish. I spend my time building backend infrastructure, queues, and internal services at The Ninja Studio.`,
+      `${greetingGuideline} I'm Ashish. I spend my days building backend systems, API performance layers, and database infrastructure at The Ninja Studio.`,
+      `${greetingGuideline} I'm Ashish. I've spent the past year building distributed backend services and data platforms at The Ninja Studio.`,
     ];
     const rotatedOpening = openingStyles[openingIndex];
 
-    const resumeMentionStyles = [
-      `Attached my resume in case it's useful.`,
-      `I've attached my resume for reference.`,
-      `Attached my resume below in case you're interested.`,
-      `I've attached my resume here for context.`,
-      `Attached my resume in case your team finds it helpful.`,
-      `I've attached my resume below.`,
-      `My resume is attached for reference.`,
-      `Attached my resume here.`,
-      `I've attached my resume for quick review.`,
-      `Resume is attached below for context.`,
+    const endingStyles = [
+      "I've attached my resume.",
+      'Resume attached.',
+      'Attached my resume.',
     ];
-    const rotatedResume = resumeMentionStyles[closingIndex];
+    const rotatedEnding = endingStyles[closingIndex % 3];
 
-    const signoffStyles = [
-      `Best,\nAshish`,
-      `Thanks,\nAshish`,
-      `Regards,\nAshish Raj`,
-      `Best regards,\nAshish`,
-      `Ashish Raj`,
-      `Best,\nAshish Raj`,
-      `Thanks,\nAshish Raj`,
-      `Best regards,\nAshish Raj`,
-      `Regards,\nAshish`,
-      `Cheers,\nAshish`,
-    ];
-    const rotatedSignoff = signoffStyles[closingIndex];
-
-    const rotatedClosing = `${rotatedResume}\n\n${rotatedSignoff}`;
-
-    // Conversational Company Sentence (conversational, not marketing copy, NO "very relevant" or "directly relevant") & Single Relevant Achievement (ONLY ONE)
+    // Conversational Company Sentence (one sentence, personal, observational, no marketing praise) & Single Relevant Achievement (one sentence, one achievement, no repeating 'At The Ninja Studio...')
     let companyRelevanceSentence = '';
     let singleAchievement = '';
 
@@ -288,131 +265,144 @@ export class EmailGenerationService {
     const lowerName = (company.companyName || '').toLowerCase();
 
     if (lowerDomain.includes('neon') || lowerName.includes('neon')) {
-      companyRelevanceSentence = `I spend most of my time working with PostgreSQL, so Neon felt like a natural company to reach out to.`;
-      singleAchievement = `At The Ninja Studio, I optimized PostgreSQL queries that were bottlenecking production and added targeted indexes that cut latency significantly.`;
+      companyRelevanceSentence = `I spend most of my day-to-day work dealing with PostgreSQL internals and performance, so Neon felt like a natural company to reach out to.`;
+      singleAchievement = `I recently overhauled our database query patterns and indexing strategies to resolve production latency bottlenecks across our heaviest tables.`;
     } else if (lowerDomain.includes('clickhouse') || lowerName.includes('clickhouse')) {
-      companyRelevanceSentence = `I've spent a lot of time thinking about database performance, which is why ClickHouse stood out.`;
-      singleAchievement = `At The Ninja Studio, I redesigned our reporting database queries by removing heavy joins and adding Redis caching for high-throughput reads.`;
+      companyRelevanceSentence = `I've spent a fair amount of time dealing with analytics workloads and heavy database reads, so ClickHouse felt worth reaching out to.`;
+      singleAchievement = `I spent a few weeks untangling reporting queries and database bottlenecks that had become difficult to scale under high traffic.`;
     } else if (lowerDomain.includes('resend') || lowerName.includes('resend')) {
-      companyRelevanceSentence = `I've built background delivery pipelines myself and really like how developer-friendly Resend made email.`;
-      singleAchievement = `At The Ninja Studio, I built our background notification pipeline using BullMQ with automated retry handling and idempotent delivery guarantees.`;
+      companyRelevanceSentence = `I've worked on a few notification systems myself over the past year, which is why Resend stood out as a team to reach out to.`;
+      singleAchievement = `I rebuilt our background notification pipeline to make message delivery retries, worker queues, and failure recovery reliable under load.`;
     } else if (lowerDomain.includes('linear') || lowerName.includes('linear')) {
-      companyRelevanceSentence = `I care a lot about high-performance software and craftsmanship, which is what drew me to Linear.`;
-      singleAchievement = `At The Ninja Studio, I built a centralized audit logging platform across 15+ modules with sub-millisecond overhead.`;
+      companyRelevanceSentence = `I care a lot about high-performance software and craftsmanship in tooling, so Linear felt like an obvious team to write to.`;
+      singleAchievement = `One project I worked on was a centralized audit logging platform engineered to handle structured events across all product services.`;
     } else if (lowerDomain.includes('posthog') || lowerName.includes('posthog')) {
-      companyRelevanceSentence = `I've been following how you approach open telemetry and product analytics, and really appreciate how transparently your team builds.`;
-      singleAchievement = `At The Ninja Studio, I engineered an event-driven audit logging system handling asynchronous telemetry across 15+ modules.`;
+      companyRelevanceSentence = `A lot of my recent work has been around event processing and telemetry pipelines, which is why PostHog stood out.`;
+      singleAchievement = `One project I owned was building an event logging pipeline used across our core services to trace user activity reliably.`;
     } else if (lowerDomain.includes('supabase') || lowerName.includes('supabase')) {
-      companyRelevanceSentence = `Most of my database work is in Postgres and auth systems, so I've naturally followed Supabase for a while.`;
-      singleAchievement = `At The Ninja Studio, I built tenant-scoped authorization (BranchGuard) with Redis caching to eliminate redundant database checks.`;
+      companyRelevanceSentence = `Most of my recent database work is in Postgres and access control, so Supabase felt like a very natural team to send a note to.`;
+      singleAchievement = `I recently built a tenant-scoped authorization system used across multiple product modules to isolate customer data cleanly.`;
     } else if (lowerDomain.includes('sourcefuse') || lowerName.includes('sourcefuse')) {
-      companyRelevanceSentence = `Most of my work revolves around cloud backend infrastructure, so SourceFuse felt like a natural team to check out.`;
-      singleAchievement = `At The Ninja Studio, I built tenant-scoped authorization (BranchGuard) with Redis caching and cut query latency significantly.`;
+      companyRelevanceSentence = `A lot of my recent projects have centered on scalable cloud backends and databases, so SourceFuse felt like a natural team to reach out to.`;
+      singleAchievement = `One system I built was a multi-tenant authorization layer to safeguard customer data and control service permissions.`;
     } else if (lowerDomain.includes('perennial') || lowerName.includes('perennial')) {
-      companyRelevanceSentence = `Most of my work revolves around backend infrastructure and enterprise services, so Perennial felt worth reaching out to.`;
-      singleAchievement = `At The Ninja Studio, I built a centralized audit logging platform across 15+ modules and implemented Redis-based authorization caching.`;
+      companyRelevanceSentence = `Most of my day-to-day work revolves around enterprise backend services and distributed infrastructure, so Perennial felt like a very natural team to reach out to.`;
+      singleAchievement = `One project I owned was building a centralized audit logging platform that handles sensitive events across all internal modules.`;
     } else if (lowerDomain.includes('ibhubs') || lowerName.includes('ibhubs') || lowerDomain.includes('ib hubs') || lowerName.includes('ib hubs')) {
-      companyRelevanceSentence = `I've spent most of my time building platform infrastructure, so iB Hubs felt like an interesting team to look at.`;
-      singleAchievement = `At The Ninja Studio, I built our background notification pipeline using BullMQ with automated retry handling and idempotent delivery guarantees.`;
+      companyRelevanceSentence = `I've spent a lot of time building asynchronous background systems and core services, so iB Hubs felt like an interesting team to contact.`;
+      singleAchievement = `I rebuilt our background notification pipeline to ensure message delivery retries and idempotency remained dependable under load.`;
     } else {
-      companyRelevanceSentence = `Most of my work revolves around backend infrastructure and distributed systems, so ${company.companyName} stood out to me.`;
-      singleAchievement = `At The Ninja Studio, I built a centralized audit logging platform across 15+ modules and implemented Redis-based authorization caching.`;
+      companyRelevanceSentence = `Most of my work revolves around backend infrastructure and distributed systems, so ${company.companyName} felt like an interesting team to contact.`;
+      singleAchievement = `One project I owned was building a centralized audit logging platform that handles structured event logs across core modules.`;
     }
 
-    // 2. System Prompt: Relay Outreach V5 — Human Engineer Emails
-    const systemPrompt = `# RELAY OUTREACH V5 — HUMAN ENGINEER EMAILS
+    // 2. System Prompt: RELAY OUTREACH V7
+    const systemPrompt = `# RELAY OUTREACH V7
 
-You are generating job application emails, NOT sales outreach, networking emails, cover letters, recruiting messages, or marketing copy.
-The output must feel like a software engineer personally wrote a short email from Gmail after finding a company they would genuinely like to work at.
+OBJECTIVE
+Write a cold job application email that feels like it was manually typed by a software engineer in Gmail.
+The reader should never think: "This was generated."
+The reader should think: "A developer spent a minute writing me a quick note."
+The goal is not to impress, not to persuade, not to sell.
+The goal is simply to introduce the candidate, establish relevance, show one proof point, and attach a resume.
 
-## PRIMARY GOAL
-The email has only four jobs:
-1. Introduce the candidate.
-2. Explain why this specific company was chosen.
-3. Mention ONE relevant accomplishment.
-4. Mention that the resume is attached.
+LENGTH
+Preferred: 65-80 words.
+Acceptable: 55-90 words.
+Hard maximum: 95 words.
+Avoid emails under 60 words unless adding more would create filler. Every sentence must earn its place.
+
+STRUCTURE
+Paragraph 1: Who I am. (Natural rotation, do not repeatedly use "I'm a backend engineer")
+Paragraph 2: Why I picked this company. (One sentence only, personal, observational, no praise)
+Paragraph 3: One specific achievement. (One sentence only, do NOT always start with "At The Ninja Studio...")
+Paragraph 4: Resume attached. (One sentence only: "Resume attached." OR "I've attached my resume." OR "Attached my resume.")
+
+CRITICAL CONSTRAINTS:
+- Exactly four paragraphs separated by a blank line (\\n\\n).
+- No extra paragraph.
+- No signature block. (No sign-off, no name at the end, no "Best", "Thanks", etc.)
+- No thank you.
+- No closing sentence.
+- The email must end immediately after the resume sentence.
+
+SUBJECT RULES:
+Subject should feel like a normal Gmail subject:
+Prefer:
+- Ashish Raj
+- Ashish Raj - Resume
+- Resume - Ashish Raj
+- Software Engineer - Ashish Raj
+- Ashish Raj | Backend Engineer
+Avoid:
+- Application for Backend Engineer
+- Backend Engineer Application
+- Job Inquiry
+- Seeking Opportunities
+- Interest in Opportunities
+- Current or Future Opportunities
+
+VOICE
+Write like an engineer. Not a recruiter, marketer, founder, or cover letter.
+Simple language, short sentences, natural wording. Contractions are fine (I'm, I've, I'd).
+
+COMPANY PARAGRAPH
+One sentence only. Explains why this company specifically. Personal and observational.
+Must NOT sound researched. Must NOT praise the company.
+
+ACHIEVEMENT PARAGRAPH
+Exactly ONE sentence. Exactly ONE achievement. No lists, no comma-separated accomplishments, no stacked metrics, no technology dumps.
+Rotate naturally. Do NOT always start with "At The Ninja Studio...".
+
+FORBIDDEN CONTENT
+Never mention:
+- backend openings
+- engineering openings
+- job openings
+- current or future opportunities
+- would appreciate consideration
+- reaching out regarding
+- reaching out about
+- caught my attention
+- aligns with
+- relevant to my experience
+- relevant to my background
+- very relevant
+- directly relevant
+- saw what you're building
+- opportunity to discuss
+- conversation
+- call
+- meeting
+- chat
+- connect
+- follow up
+- circle back
+- touch base
+- happy to chat
+- love to chat
+- let's connect
+- thank you for your time
+
+ENDING
+Only one sentence. Choose one:
+- Resume attached.
+- I've attached my resume.
+- Attached my resume.
 Nothing else.
 
-## LENGTH REQUIREMENTS
-- Target: 55-90 words
-- Hard maximum: 100 words
-- If the email exceeds 100 words, regenerate.
-- The entire email should be readable in under 15 seconds.
-
-## VOICE REQUIREMENTS
-- A backend engineer sending a real email to another engineer, founder, CTO, hiring manager, or recruiter.
-- Casually professional, natural, simple, direct.
-- NOT like ChatGPT, Claude, a recruiter, salesperson, marketing writer, or networking expert.
-
-## ABSOLUTELY FORBIDDEN PHRASES (Must NEVER appear in the email)
-- caught my attention
-- aligns with my experience / aligns with my background / aligns with
-- relevant to my experience / relevant to my background / very relevant / directly relevant
-- particularly drawn to
-- resonates with me / resonates with how / resonates with
-- excited about
-- reaching out regarding / reaching out about
-- would appreciate consideration
-- current or future opportunities / current or future openings / current or future / current and future
-- backend openings / engineering openings
-- opportunity to discuss
-- would love to chat / let's connect / happy to connect / happy to chat
-- introductory conversation / brief call / quick call / coffee chat
-- explore synergies
-- looking forward to hearing from you
-
-## NO AI WRITING PATTERNS
-- Additionally / Furthermore / Moreover / Notably / Importantly
-- In my current role
-- I have had the opportunity to / I have owned and maintained / I have successfully
-- I am particularly interested in / I am excited to apply / I am writing to express interest
-
-## COMPANY SENTENCE RULE
-The company sentence must sound conversational:
-"I spend most of my time working with PostgreSQL, so Neon felt like a natural company to reach out to."
-"I've spent a lot of time thinking about database performance, which is why ClickHouse stood out."
-Do not sound like marketing copy. Do not sound like a website summary. Do not repeat company slogans.
-
-## ACHIEVEMENT RULE
-Mention EXACTLY ONE achievement. Never mention multiple achievements. Never list accomplishments. Never stack technologies.
-Only ONE proof point.
-
-## GRADUATION RULE
-Do NOT mention: VIT Chennai, Graduation year, CGPA, Student status. Lead with professional experience.
-
-## CTA RULE
-Do NOT ask for: a call, a meeting, a chat, a conversation, a reply, time.
-The email ends naturally:
-"Attached my resume in case it's useful." or "I've attached my resume for reference."
-Then sign off.
-
-## Structure & Rotation
-Exactly 4 short paragraphs separated by blank lines:
-
-1. Opening (Natural, non-templated engineer intro):
+Draft Structure:
+Paragraph 1:
 ${rotatedOpening}
 
-2. Company Context (Conversational, ~15-20 words):
+Paragraph 2:
 ${companyRelevanceSentence}
 
-3. Single Relevant Achievement (ONLY ONE achievement, ~15-20 words):
+Paragraph 3:
 ${singleAchievement}
 
-4. Closing & Resume Mention (Natural engineer signoff):
-${rotatedClosing}
-
-## Candidate Source of Truth
-Name: ${candidateName}
-Current Role: Software Engineer at The Ninja Studio
-Never mention: Goklaim, student, intern at Goklaim, final year student.
-
-## Subject Guidelines
-Keep subjects short and human:
-- Backend Engineer - ${candidateName}
-- Software Engineer - ${candidateName}
-- ${candidateName} - Backend Engineer
-- Backend Engineer application - ${candidateName}
-- Software Engineer role - ${candidateName}
+Paragraph 4:
+${rotatedEnding}
 
 Output pure JSON conforming to this schema:
 {
@@ -438,7 +428,7 @@ CRITICAL: Return ONLY a single raw JSON object matching the exact schema above.`
 
     const aiResult = await this.aiProviderService.structuredComplete<RawAiMultiVariantResponse>({
       systemPrompt,
-      userPrompt: `Generate the JSON object containing technicalVariant, startupVariant, and directVariant for a concise, human-like engineer email (55-90 words, hard max 100 words) authored by software engineer ${candidateName} for ${company.companyName} (${company.domain}), sent to ${recipientClassification.title} (${recipientEmail}). Opening style: "${rotatedOpening}". Closing style: "${rotatedClosing}". Strictly adhere to 55-90 words. Output MUST start with "{" and end with "}".`,
+      userPrompt: `Generate the JSON object containing technicalVariant, startupVariant, and directVariant for a human engineer email (preferred 65-80 words, acceptable 55-90 words, hard max 95 words) authored by software engineer ${candidateName} for ${company.companyName} (${company.domain}), sent to ${recipientClassification.title} (${recipientEmail}). Opening style: "${rotatedOpening}". Ending style: "${rotatedEnding}". Strictly 4 paragraphs. No signature block. Normal Gmail subject. Output MUST start with "{" and end with "}".`,
       feature: 'OUTREACH_GENERATION',
       maxTokens: 1500,
       temperature: 0.2,
@@ -447,58 +437,68 @@ CRITICAL: Return ONLY a single raw JSON object matching the exact schema above.`
 
     const data = aiResult.data;
 
-    // Helper to sanitize each generated variant against hard V5 humanization guardrails
+    // Helper to sanitize each generated variant against hard V7 humanization guardrails
     const sanitizeVariant = (v: { subject?: string; body?: string }, defaultSubject: string) => {
       let subject = v?.subject?.trim() || defaultSubject;
       let body = v?.body?.trim() || '';
 
-      // 1. Mandatory subject keyword check & blog-title check
+      // 1. Mandatory subject keyword check, blog-title check, and length/greeting check
       if (
         !DraftQualityService.hasMandatorySubjectKeyword(subject) ||
-        DraftQualityService.isForbiddenSubject(subject)
+        DraftQualityService.isForbiddenSubject(subject) ||
+        subject.length > 45 ||
+        subject.includes('\n') ||
+        /^(hi|hello|hey)\b/i.test(subject) ||
+        /\b(experience in|working on|focused on|application for)\b/i.test(subject)
       ) {
         subject = defaultSubject;
       }
       subject = DraftQualityService.sanitizePunctuation(subject);
 
-      // 2. Forbidden phrases, forbidden CTA, and word count validation
+      // Clean up multiple spaces or excessive empty lines
+      body = body.replace(/\n{3,}/g, '\n\n').trim();
+
+      // 2. Forbidden phrases, forbidden CTA, word count, and signature validation
       const forbiddenPhrase = this.draftQualityService.hasForbiddenPhrase(body);
       const hasForbiddenCta = this.draftQualityService.hasForbiddenCta(body);
       const currentWordCount = body.split(/\s+/).filter(Boolean).length;
+      const paragraphs = body.split(/\n\s*\n/).filter(Boolean);
+      const hasSigOrClosing = DraftQualityService.hasSignatureOrClosingSentence(body);
 
-      // 3. Fallback to calibrated V5 humanized structure if AI introduced forbidden phrases, CTA asks, improper word count, or missing paragraph breaks
+      // 3. Fallback to calibrated V7 humanized structure if AI violated any V7 rules
       if (
         forbiddenPhrase ||
         hasForbiddenCta ||
+        hasSigOrClosing ||
+        paragraphs.length !== 4 ||
         currentWordCount > 95 ||
         currentWordCount < 55 ||
         !body.includes('The Ninja Studio') ||
+        !body.includes('Ashish') ||
         body.includes('graduated') ||
         body.includes('July 2026') ||
         body.includes('VIT Chennai') ||
-        body.includes('openings') ||
-        !body.includes('\n\n')
+        body.includes('openings')
       ) {
-        body = `${rotatedOpening}\n\n${companyRelevanceSentence}\n\n${singleAchievement}\n\n${rotatedClosing}`;
+        body = `${rotatedOpening}\n\n${companyRelevanceSentence}\n\n${singleAchievement}\n\n${rotatedEnding}`;
       }
 
-      // Clean up multiple spaces or excessive empty lines
       body = body.replace(/\n{3,}/g, '\n\n').trim();
 
       return { subject, body };
     };
 
     const subjectChoices = [
-      `Backend Engineer - ${candidateName}`,
-      `Software Engineer - ${candidateName}`,
-      `${candidateName} - Backend Engineer`,
-      `Backend Engineer application - ${candidateName}`,
-      `Software Engineer role - ${candidateName}`,
-      `Backend Engineer - ${candidateName}`,
-      `Software Engineer - ${candidateName}`,
-      `${candidateName} - Backend Engineer`,
-      `Backend Engineer application - ${candidateName}`,
-      `Software Engineer role - ${candidateName}`,
+      `Ashish Raj - Resume`,
+      `Resume - Ashish Raj`,
+      `Software Engineer - Ashish Raj`,
+      `Ashish Raj | Backend Engineer`,
+      `Ashish Raj`,
+      `Ashish Raj - Resume`,
+      `Software Engineer - Ashish Raj`,
+      `Ashish Raj | Backend Engineer`,
+      `Resume - Ashish Raj`,
+      `Ashish Raj`,
     ];
     const defaultTier1Subject = subjectChoices[openingIndex];
 
