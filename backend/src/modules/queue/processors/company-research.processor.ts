@@ -99,11 +99,14 @@ export class CompanyResearchProcessor extends WorkerHost {
         profile = await this.companyProfileService.researchAndSaveCompany(domain, companyName);
       } catch (err: any) {
         this.logger.error(`[CompanyResearchProcessor] Failed research for domain "${domain}": ${err.message}`, err.stack);
-        // If on last attempt, mark pending prospects for this domain as FAILED so campaign does not stall
+        // If on last attempt, mark pending prospects for this domain as RESEARCH_RETRY_REQUIRED or FAILED so campaign does not stall
         if (job.attemptsMade >= (job.opts?.attempts || 3) - 1) {
+          const targetStatus = err.message?.includes('RESEARCH_RETRY_REQUIRED')
+            ? ProspectResearchStatus.RESEARCH_RETRY_REQUIRED
+            : ProspectResearchStatus.FAILED;
           await this.prospectRepository.update(
             { domain, researchStatus: ProspectResearchStatus.PENDING },
-            { researchStatus: ProspectResearchStatus.FAILED, error: err.message },
+            { researchStatus: targetStatus, error: err.message },
           );
           if (campaignId) {
             await this.checkAndTriggerDraftGeneration(campaignId);

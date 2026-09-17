@@ -248,45 +248,34 @@ export class EmailGenerationService {
     let companyRelevanceSentence = '';
     let singleAchievement = '';
 
-    const lowerDomain = (company.domain || '').toLowerCase();
-    const lowerName = (company.companyName || '').toLowerCase();
-
-    if (lowerDomain.includes('neon') || lowerName.includes('neon')) {
-      companyRelevanceSentence = `I spend most of my day-to-day work dealing with PostgreSQL internals and query performance, so Neon felt like a natural company to reach out to.`;
-      singleAchievement = `I recently overhauled our database query patterns and indexing strategies to resolve production latency bottlenecks across our heaviest tables.`;
-    } else if (lowerDomain.includes('clickhouse') || lowerName.includes('clickhouse')) {
-      companyRelevanceSentence = `I've spent a fair amount of time dealing with analytics workloads and heavy database reads, so ClickHouse felt worth reaching out to.`;
-      singleAchievement = `I spent a few weeks untangling reporting queries and database bottlenecks that had become difficult to scale under high traffic.`;
-    } else if (lowerDomain.includes('resend') || lowerName.includes('resend')) {
-      companyRelevanceSentence = `I've worked on a few notification systems myself over the past year, which is why Resend stood out as a team to reach out to.`;
-      singleAchievement = `I rebuilt our background notification pipeline with BullMQ to make message delivery retries, worker queues, and failure recovery reliable under load.`;
-    } else if (lowerDomain.includes('linear') || lowerName.includes('linear')) {
-      companyRelevanceSentence = `I care a lot about high-performance software and craftsmanship in tooling, so Linear felt like an obvious team to write to.`;
-      singleAchievement = `One project I worked on was a centralized audit logging platform engineered to handle structured events across all product services.`;
-    } else if (lowerDomain.includes('posthog') || lowerName.includes('posthog')) {
-      companyRelevanceSentence = `A lot of my recent work has been around event processing and telemetry pipelines, which is why PostHog stood out.`;
-      singleAchievement = `One project I owned was building an event logging pipeline used across our core services to trace user activity reliably.`;
-    } else if (lowerDomain.includes('supabase') || lowerName.includes('supabase')) {
-      companyRelevanceSentence = `Most of my recent database work is in Postgres and access control, so Supabase felt like a very natural team to send a note to.`;
-      singleAchievement = `I recently built a tenant-scoped authorization system used across multiple product modules to isolate customer data cleanly.`;
-    } else if (lowerDomain.includes('sourcefuse') || lowerName.includes('sourcefuse')) {
-      companyRelevanceSentence = `A lot of my recent projects have centered on scalable cloud backends and databases, so SourceFuse felt like a natural team to reach out to.`;
-      singleAchievement = `One system I built was a multi-tenant authorization layer to safeguard customer data and control service permissions.`;
-    } else if (lowerDomain.includes('perennial') || lowerName.includes('perennial')) {
-      companyRelevanceSentence = `Most of my day-to-day work revolves around enterprise backend services and distributed infrastructure, so Perennial felt like a very natural team to reach out to.`;
-      singleAchievement = `One project I owned was building a centralized audit logging platform that handles sensitive events across all internal modules.`;
-    } else if (
-      lowerDomain.includes('ibhubs') ||
-      lowerName.includes('ibhubs') ||
-      lowerDomain.includes('ib hubs') ||
-      lowerName.includes('ib hubs')
-    ) {
-      companyRelevanceSentence = `I've spent a lot of time building asynchronous background systems and core services, so iB Hubs felt like an interesting team to contact.`;
-      singleAchievement = `I rebuilt our background notification pipeline to ensure message delivery retries and idempotency remained dependable under load.`;
+    // Company Relevance Sentence & Concrete Achievement / Proof Points (Fully dynamic & company-agnostic)
+    const chosenProjLower = (matchResult.chosenProject || '').toLowerCase();
+    if (chosenProjLower.includes('branchguard')) {
+      singleAchievement = `I designed and implemented branch-based access control (BranchGuard) to enforce tenant-scoped authorization and close security bypasses across core modules.`;
+    } else if (chosenProjLower.includes('redis') || chosenProjLower.includes('caching')) {
+      singleAchievement = `I implemented Redis caching for authorization lookups to eliminate repetitive database validation queries on authenticated requests.`;
+    } else if (chosenProjLower.includes('bullmq') || chosenProjLower.includes('notification')) {
+      singleAchievement = `I engineered an idempotent background notification engine with BullMQ to handle reliable delivery retries, worker queues, and backoff under load.`;
+    } else if (chosenProjLower.includes('activitylog') || chosenProjLower.includes('activity log') || chosenProjLower.includes('audit')) {
+      singleAchievement = `I architected an event-driven audit logging platform using NestJS EventEmitter2 and Async Local Storage across 15+ internal modules.`;
+    } else if (chosenProjLower.includes('impersonat')) {
+      singleAchievement = `I built a Super Admin impersonation system end-to-end with configurable-expiry tokens and an audit trail powered by Async Local Storage request context.`;
+    } else if (chosenProjLower.includes('leave management') || chosenProjLower.includes('query optimization')) {
+      singleAchievement = `I optimized backend query performance by removing redundant database joins and adding targeted PostgreSQL indexes.`;
     } else {
-      companyRelevanceSentence = `Most of my work revolves around backend infrastructure and distributed systems, so ${company.companyName} felt like an interesting team to contact.`;
-      singleAchievement = `One project I owned was building a centralized audit logging platform that handles structured event logs across core modules.`;
+      singleAchievement = matchResult.whyRelevant || `One project I owned was building scalable backend platform services and database infrastructure.`;
     }
+
+    const companyFocus =
+      (company.products && company.products.length > 0)
+        ? `your work on ${company.products[0]}`
+        : (company.recentInitiatives && company.recentInitiatives.length > 0)
+        ? `your recent initiatives in ${company.recentInitiatives[0]}`
+        : (company.techSignals && company.techSignals.length > 0)
+        ? `your engineering stack around ${company.techSignals.slice(0, 2).join(' and ')}`
+        : `what your team is building in ${company.industry || 'backend infrastructure'}`;
+
+    companyRelevanceSentence = `I've been following ${company.companyName} and was drawn to ${companyFocus}, which resonated with my engineering background.`;
 
     // Reason Contact Chosen description
     const reasonContactChosen =

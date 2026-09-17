@@ -95,7 +95,7 @@ export class OpenAIProvider implements IAIProvider {
   async complete(request: CompletionRequestDto): Promise<AiCompletionResult<string>> {
     const client = this.ensureClient();
     const startTime = Date.now();
-    const model = this.defaultModel;
+    const model = request.model || this.defaultModel;
 
     const response = await this.executeWithRetry(() =>
       client.chat.completions.create({
@@ -129,7 +129,7 @@ export class OpenAIProvider implements IAIProvider {
   async structuredComplete<T>(request: CompletionRequestDto): Promise<AiCompletionResult<T>> {
     const client = this.ensureClient();
     const startTime = Date.now();
-    const model = this.defaultModel;
+    const model = request.model || this.defaultModel;
 
     const response = await this.executeWithRetry(() =>
       client.chat.completions.create({

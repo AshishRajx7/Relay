@@ -12,9 +12,11 @@ import {
 } from '../../../common/constants/app.constants';
 import {
   Prospect,
+  ContactType,
   ProspectResearchStatus,
   ProspectDraftStatus,
   ProspectFailureType,
+  NoOutreachAngleReason,
 } from '../../prospects/entities/prospect.entity';
 import { CompanyProfile } from '../../company-research/entities/company-profile.entity';
 import { CandidateProfile } from '../../resume/entities/candidate-profile.entity';
@@ -23,8 +25,10 @@ import { EmailDraft, OutreachDraftStatus } from '../../outreach/entities/email-d
 import { DraftReasoning } from '../../outreach/entities/draft-reasoning.entity';
 import { DraftQuality } from '../../outreach/entities/draft-quality.entity';
 import { EmailDraftVariant } from '../../outreach/entities/email-draft-variant.entity';
+import { OutreachStrategyEntity } from '../../outreach/entities/outreach-strategy.entity';
 import { EmailGenerationService } from '../../outreach/services/email-generation.service';
 import { CandidateMatchingService } from '../../outreach/services/candidate-matching.service';
+import { DraftVerificationService } from '../../outreach/services/draft-verification.service';
 
 @Processor(QUEUE_DRAFT_GENERATION, { concurrency: 5 })
 export class DraftGenerationProcessor extends WorkerHost {
@@ -47,8 +51,11 @@ export class DraftGenerationProcessor extends WorkerHost {
     private readonly draftQualityRepository: Repository<DraftQuality>,
     @InjectRepository(EmailDraftVariant)
     private readonly variantRepository: Repository<EmailDraftVariant>,
+    @InjectRepository(OutreachStrategyEntity)
+    private readonly strategyRepository: Repository<OutreachStrategyEntity>,
     private readonly emailGenerationService: EmailGenerationService,
     private readonly candidateMatchingService: CandidateMatchingService,
+    private readonly draftVerificationService: DraftVerificationService,
     @InjectQueue(QUEUE_DRAFT_GENERATION)
     private readonly draftQueue: Queue,
     @InjectQueue(QUEUE_GMAIL_DRAFT)
@@ -145,11 +152,26 @@ export class DraftGenerationProcessor extends WorkerHost {
 
     const candidate = multiResumeMatch.selectedCandidate;
 
-    // Notice: If company research score < 40, log notice and generate using calibrated LOW_MATCH / generic tier
-    if ((prospect.companyProfile.researchScore || 0) < 40) {
-      this.logger.log(
-        `Company research score for ${prospect.domain} is < 40 (${prospect.companyProfile.researchScore}). Proceeding with outreach generation using calibrated personalization tier.`,
-      );
+    // 1. Evaluate V3 Hybrid Relational Matching
+    const v3Match = await this.candidateMatchingService.matchCandidateToCompany(
+      prospect.companyProfile,
+      candidate.id,
+      prospect.campaignId,
+    );
+
+    if (!v3Match.match) {
+      const refusalReason = v3Match.refusalReason || NoOutreachAngleReason.LOW_RELATIONSHIP_STRENGTH;
+      this.logger.warn(`Terminal refusal for prospect ${prospect.email} at ${prospect.companyProfile.companyName}: ${refusalReason}`);
+
+      prospect.draftStatus = ProspectDraftStatus.NO_SUFFICIENT_OUTREACH_ANGLE;
+      prospect.noAngleReason = refusalReason;
+      await this.prospectRepository.save(prospect);
+
+      return {
+        prospectId: prospect.id,
+        status: ProspectDraftStatus.NO_SUFFICIENT_OUTREACH_ANGLE,
+        refusalReason,
+      };
     }
 
     try {
@@ -164,7 +186,7 @@ export class DraftGenerationProcessor extends WorkerHost {
         multiResumeMatch,
       );
 
-      // Save EmailDraft (Auto-approved for seamless automated pipeline)
+      // Save EmailDraft (Initial status: READY_FOR_APPROVAL)
       let draft = await this.emailDraftRepository.findOne({ where: { prospectId: prospect.id } });
       if (!draft) {
         draft = this.emailDraftRepository.create({ prospectId: prospect.id });
@@ -172,17 +194,34 @@ export class DraftGenerationProcessor extends WorkerHost {
 
       draft.subject = result.subject;
       draft.body = result.body;
-      draft.status = OutreachDraftStatus.APPROVED;
+      draft.status = OutreachDraftStatus.READY_FOR_APPROVAL;
 
       const savedDraft = await this.emailDraftRepository.save(draft);
+
+      // Save OutreachStrategyEntity
+      let strategy = await this.strategyRepository.findOne({ where: { emailDraftId: savedDraft.id } });
+      if (!strategy) {
+        strategy = this.strategyRepository.create({
+          emailDraftId: savedDraft.id,
+          recipientClassification: prospect.contactType === ContactType.ENGINEERING ? 'ENGINEERING_PEER' : 'RECRUITER',
+          primaryMatchId: v3Match.match.id,
+          objective: 'START_CONVERSATION',
+          tone: 'PEER',
+          avoidTopics: 'Generic AI boilerplate, desperate asks, ungrounded claims',
+          closingStrategy: 'Low-friction conversation starter with resume context',
+        });
+      } else {
+        strategy.primaryMatchId = v3Match.match.id;
+      }
+      await this.strategyRepository.save(strategy);
 
       // Save DraftReasoning
       let reasoning = await this.draftReasoningRepository.findOne({ where: { emailDraftId: savedDraft.id } });
       if (!reasoning) {
         reasoning = this.draftReasoningRepository.create({ emailDraftId: savedDraft.id });
       }
-      reasoning.chosenProject = result.matchResult.chosenProject;
-      reasoning.matchScore = multiResumeMatch.matchScore;
+      reasoning.chosenProject = v3Match.candidateEvidence?.deliverableName || result.matchResult.chosenProject;
+      reasoning.matchScore = v3Match.compositeScore || multiResumeMatch.matchScore;
       reasoning.whyCompany = result.whyCompany;
       reasoning.whyMe = result.whyMe;
       reasoning.whyNow = result.whyNow;
@@ -238,10 +277,56 @@ export class DraftGenerationProcessor extends WorkerHost {
         await this.variantRepository.save(variantEntity);
       }
 
-      // Update prospect draft status (Auto-approved for seamless automated pipeline)
-      prospect.draftStatus = ProspectDraftStatus.APPROVED;
-      prospect.failureType = null;
-      await this.prospectRepository.save(prospect);
+      // 2. Run Adversarial Claim Verification (Provenance check & cross-role bleed check)
+      const verification = await this.draftVerificationService.verifyDraft(
+        savedDraft.id,
+        savedDraft.body,
+        candidate.id,
+        prospect.companyProfile.id,
+        strategy,
+      );
+
+      // 3. Human-Gated Workflow:
+      // If verification PASS -> READY_FOR_APPROVAL
+      // If campaign.autonomousGmailStaging === true -> auto-stage to Gmail
+      // Else -> wait for explicit human operator approval in UI!
+      const campaign = prospect.campaignId
+        ? await this.campaignRepository.findOne({ where: { id: prospect.campaignId } })
+        : null;
+
+      if (verification.passed && verification.severity === 'PASS') {
+        if (campaign?.autonomousGmailStaging) {
+          savedDraft.status = OutreachDraftStatus.APPROVED;
+          prospect.draftStatus = ProspectDraftStatus.APPROVED;
+          await this.emailDraftRepository.save(savedDraft);
+          await this.prospectRepository.save(prospect);
+
+          await this.gmailQueue.add(
+            JOB_CREATE_GMAIL_DRAFT,
+            { draftId: savedDraft.id },
+            {
+              jobId: `gmail-draft-${savedDraft.id}`,
+              attempts: 3,
+              backoff: { type: 'exponential', delay: 3000 },
+              removeOnComplete: true,
+            },
+          );
+          this.logger.log(`[DraftGenerationProcessor] Autonomous Gmail staging triggered for draft ID ${savedDraft.id}`);
+        } else {
+          savedDraft.status = OutreachDraftStatus.READY_FOR_APPROVAL;
+          prospect.draftStatus = ProspectDraftStatus.READY_FOR_APPROVAL;
+          await this.emailDraftRepository.save(savedDraft);
+          await this.prospectRepository.save(prospect);
+          this.logger.log(`[DraftGenerationProcessor] Draft ID ${savedDraft.id} verified with PASS. Locked in READY_FOR_APPROVAL awaiting human operator approval.`);
+        }
+      } else {
+        // Verification issues flagged
+        savedDraft.status = OutreachDraftStatus.REVIEW_REQUIRED;
+        prospect.draftStatus = ProspectDraftStatus.REVIEW_REQUIRED;
+        await this.emailDraftRepository.save(savedDraft);
+        await this.prospectRepository.save(prospect);
+        this.logger.warn(`[DraftGenerationProcessor] Draft ID ${savedDraft.id} flagged with ${verification.severity}: ${verification.verifierNotes}. Staging halted.`);
+      }
 
       // Increment campaign LLM calls and estimated cost ($0.0015 per LLM generation call)
       if (prospect.campaignId) {
@@ -253,31 +338,12 @@ export class DraftGenerationProcessor extends WorkerHost {
           .execute();
       }
 
-      this.logger.log(
-        `Draft generated for ${prospect.email} | Selected: ${result.selectedVariantType} | ` +
-        `Quality Score: ${result.quality.confidenceScore}/100 | Status: ${draft.status}`
-      );
-
-      // Task 3: Auto-chain Draft Generation -> Gmail Draft Creation
-      await this.gmailQueue.add(
-        JOB_CREATE_GMAIL_DRAFT,
-        { draftId: savedDraft.id },
-        {
-          jobId: `gmail-draft-${savedDraft.id}`,
-          attempts: 3,
-          backoff: { type: 'exponential', delay: 3000 },
-          removeOnComplete: true,
-        },
-      );
-      this.logger.log(
-        `[DraftGenerationProcessor] Auto-enqueued Gmail draft creation for draft ID ${savedDraft.id} (${prospect.email})`
-      );
-
       return {
         draftId: savedDraft.id,
         prospectId: prospect.id,
-        status: draft.status,
+        status: savedDraft.status,
         confidenceScore: result.quality.confidenceScore,
+        verificationSeverity: verification.severity,
       };
     } catch (err: any) {
       this.logger.error(`Failed to generate draft for ${prospect.email}: ${err.message}`, err.stack);

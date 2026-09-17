@@ -22,6 +22,7 @@ export interface AppConfig {
     apiKey: string;
     baseUrl: string;
     model: string;
+    matchingModel?: string;
     maxTokens: number;
     temperature: number;
   };
@@ -60,6 +61,7 @@ export const validationSchema = Joi.object({
   AI_API_KEY: Joi.string().allow('').optional(),
   AI_BASE_URL: Joi.string().default('https://integrate.api.nvidia.com/v1'),
   AI_MODEL: Joi.string().default('deepseek-ai/deepseek-v4-flash-0731'),
+  AI_MATCHING_MODEL: Joi.string().optional(),
   AI_MAX_TOKENS: Joi.number().default(4096),
   AI_TEMPERATURE: Joi.number().default(0.3),
 
@@ -112,6 +114,7 @@ export const configuration = (): AppConfig => ({
     apiKey: process.env.AI_API_KEY || process.env.OPENAI_API_KEY || '',
     baseUrl: process.env.AI_BASE_URL || 'https://integrate.api.nvidia.com/v1',
     model: process.env.AI_MODEL || process.env.OPENAI_MODEL || 'deepseek-ai/deepseek-v4-flash-0731',
+    matchingModel: process.env.AI_MATCHING_MODEL || process.env.AI_MODEL || 'meta/llama-3.2-11b-vision-instruct',
     maxTokens: parseInt(process.env.AI_MAX_TOKENS || process.env.OPENAI_MAX_TOKENS || '4096', 10),
     temperature: parseFloat(process.env.AI_TEMPERATURE || process.env.OPENAI_TEMPERATURE || '0.3'),
   },

@@ -5,9 +5,12 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   OneToOne,
+  OneToMany,
   Index,
 } from 'typeorm';
 import { CandidateProfile } from './candidate-profile.entity';
+import { CandidateExperienceEntity } from './candidate-experience.entity';
+import { CandidateEvidenceEntity } from './candidate-evidence.entity';
 
 export enum ResumeFileStatus {
   UPLOADED = 'UPLOADED',
@@ -71,6 +74,12 @@ export class ResumeFile {
     eager: true,
   })
   profile: CandidateProfile | null;
+
+  @OneToMany(() => CandidateExperienceEntity, (exp) => exp.resumeFile)
+  experiences: CandidateExperienceEntity[];
+
+  @OneToMany(() => CandidateEvidenceEntity, (ev) => ev.resumeFile)
+  evidenceClaims: CandidateEvidenceEntity[];
 
   @CreateDateColumn({ name: 'uploaded_at', type: 'timestamptz' })
   uploadedAt: Date;

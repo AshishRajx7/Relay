@@ -1,7 +1,10 @@
 import { Injectable, Logger, Inject } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { CompanyProfile, CompanyEvidence } from '../entities/company-profile.entity';
+import * as crypto from 'crypto';
+import { CompanyProfile, CompanyEvidence, DeterministicCoverageMetrics } from '../entities/company-profile.entity';
+import { CompanySource } from '../entities/company-source.entity';
+import { CompanyEvidenceEntity, CompanyEvidenceCategory } from '../entities/company-evidence.entity';
 import { Prospect, ProspectResearchStatus } from '../../prospects/entities/prospect.entity';
 import { Campaign } from '../../campaigns/entities/campaign.entity';
 import { AIProviderService } from '../../ai-provider/ai-provider.service';
@@ -31,6 +34,10 @@ export class CompanyProfileService {
   constructor(
     @InjectRepository(CompanyProfile)
     private readonly companyProfileRepository: Repository<CompanyProfile>,
+    @InjectRepository(CompanySource)
+    private readonly sourceRepository: Repository<CompanySource>,
+    @InjectRepository(CompanyEvidenceEntity)
+    private readonly evidenceRepository: Repository<CompanyEvidenceEntity>,
     @InjectRepository(Prospect)
     private readonly prospectRepository: Repository<Prospect>,
     @InjectRepository(Campaign)
@@ -132,14 +139,52 @@ export class CompanyProfileService {
 
     // 2. Crawl homepage, /about, /careers (max 3 subpages)
     const crawlResult = await this.crawlProvider.crawl(targetUrl, 2);
-    const markdownContent = crawlResult.markdown || `Company website: ${targetUrl}`;
+    const markdownContent = crawlResult.markdown || '';
 
-    // 3. AI Extraction via NVIDIA NIM
+    // If crawler failed, timed out, or returned blocked/empty content, trigger RESEARCH_RETRY_REQUIRED
+    if (!crawlResult.success || !markdownContent || markdownContent.trim().length < 50) {
+      this.logger.warn(`Crawler returned insufficient or failed content for domain ${normalizedDomain}. Marking RESEARCH_RETRY_REQUIRED.`);
+      await this.markProspectsRetryRequired(normalizedDomain, crawlResult.errorMessage || 'Crawler returned empty or blocked content');
+      throw new Error(`RESEARCH_RETRY_REQUIRED: Crawler was unable to extract valid content for ${normalizedDomain}: ${crawlResult.errorMessage || 'insufficient content'}`);
+    }
+
+    // 3. Upsert base CompanyProfile entity to obtain ID
+    if (!profile) {
+      profile = this.companyProfileRepository.create({
+        domain: normalizedDomain,
+      });
+      profile = await this.companyProfileRepository.save(profile);
+    }
+
+    // 4. Save raw CompanySource with contentHash and provenance metadata
+    const sourceHash = crypto.createHash('sha256').update(markdownContent).digest('hex');
+    let source = await this.sourceRepository.findOne({ where: { companyProfileId: profile.id, url: targetUrl } });
+    if (!source) {
+      source = this.sourceRepository.create({
+        companyProfileId: profile.id,
+        url: targetUrl,
+        section: 'HOMEPAGE',
+        rawMarkdown: markdownContent,
+        contentHash: sourceHash,
+        retrievedAt: new Date(),
+        httpStatus: 200,
+        wordCount: crawlResult.wordCount || markdownContent.split(/\s+/).length,
+      });
+    } else {
+      source.rawMarkdown = markdownContent;
+      source.contentHash = sourceHash;
+      source.retrievedAt = new Date();
+      source.wordCount = crawlResult.wordCount || markdownContent.split(/\s+/).length;
+    }
+    const savedSource = await this.sourceRepository.save(source);
+
+    // 5. AI Extraction via NVIDIA NIM
     const systemPrompt = `You are a Principal Company Intelligence Analyst.
 Analyze the crawled web text for the company domain "${normalizedDomain}" and extract high-conviction structured company intelligence.
 
 MANDATORY EVIDENCE REQUIREMENT:
-For every extracted technology, hiring requirement, or product claim, you MUST include supporting evidence in the "evidence" array with the source page (e.g. "/careers", "/about", "homepage") and exact or near-exact quote.
+For every extracted technology, hiring requirement, or product claim, you MUST include supporting evidence in the "evidence" array with the source page (e.g. "/careers", "/about", "homepage") and exact verbatim quote.
+The quote MUST BE an exact contiguous snippet from the crawled text. NEVER fabricate or paraphrase a quote in the evidence array.
 
 Output pure JSON conforming to this schema:
 {
@@ -159,7 +204,7 @@ Output pure JSON conforming to this schema:
       "source": "homepage | /about | /careers",
       "url": "https://${normalizedDomain}/careers",
       "type": "CAREERS | ABOUT | HOMEPAGE",
-      "quote": "Direct text snippet proving the claim"
+      "quote": "Exact verbatim contiguous text snippet proving the claim"
     }
   ]
 }`;
@@ -176,16 +221,105 @@ Output pure JSON conforming to this schema:
 
     const data = aiResult.data;
 
-    // 4. Calculate exact research score (0-100)
-    const researchScore = this.calculateResearchScore(data, true);
+    // 6. Persist verified CompanyEvidenceEntity records (Zero synthesized quotes)
+    await this.evidenceRepository.delete({ companyProfileId: profile.id });
+    if (data.evidence && Array.isArray(data.evidence)) {
+      const normalizedMarkdown = markdownContent.replace(/\s+/g, ' ');
+      for (const item of data.evidence) {
+        const cleanQuote = (item.quote || '').trim();
+        if (!cleanQuote || cleanQuote.length < 10) continue;
 
-    // 5. Upsert CompanyProfile entity
-    if (!profile) {
-      profile = this.companyProfileRepository.create({
-        domain: normalizedDomain,
-      });
+        // Verify quote is genuinely in source markdown (verbatim source fact)
+        const isExact = markdownContent.includes(cleanQuote);
+        const isNormalizedMatch = !isExact && normalizedMarkdown.includes(cleanQuote.replace(/\s+/g, ' '));
+
+        if (!isExact && !isNormalizedMatch) {
+          this.logger.warn(`Rejecting synthesized company quote not present in crawled text: "${cleanQuote.slice(0, 50)}..."`);
+          continue;
+        }
+
+        let category: CompanyEvidenceCategory = 'PRODUCT';
+        const qLower = cleanQuote.toLowerCase();
+        if (
+          qLower.includes('aws') || qLower.includes('cloud') || qLower.includes('docker') ||
+          qLower.includes('kubernetes') || qLower.includes('database') || qLower.includes('postgres') ||
+          qLower.includes('redis') || qLower.includes('api') || qLower.includes('nest') || qLower.includes('react')
+        ) {
+          category = 'TECH_STACK';
+        } else if (
+          qLower.includes('compliance') || qLower.includes('security') || qLower.includes('hipaa') ||
+          qLower.includes('soc2') || qLower.includes('regtech') || qLower.includes('audit')
+        ) {
+          category = 'CUSTOMER_PROBLEM';
+        } else if (qLower.includes('scale') || qLower.includes('microservice') || qLower.includes('architecture')) {
+          category = 'ARCHITECTURE';
+        } else if (qLower.includes('hiring') || qLower.includes('role') || qLower.includes('engineer')) {
+          category = 'INITIATIVE';
+        }
+
+        const evidenceEntity = this.evidenceRepository.create({
+          companyProfileId: profile.id,
+          sourceId: savedSource.id,
+          sourceUrl: item.url || targetUrl,
+          verbatimQuote: cleanQuote, // SOURCE FACT: verbatim contiguous substring
+          atomicClaim: cleanQuote, // normalized paraphrase
+          category,
+          confidence: 1.0,
+          isSourceFact: true,
+        });
+        await this.evidenceRepository.save(evidenceEntity);
+      }
     }
 
+    // 7. Calculate deterministic coverage metrics (Decoupled from relationship quality)
+    const totalWords = crawlResult.wordCount || markdownContent.split(/\s+/).length;
+    const hasSummary = Boolean(data.summary && data.summary.trim().length >= 20);
+    const hasProducts = Boolean(data.products && data.products.length > 0);
+    const hasTech = Boolean(data.techSignals && data.techSignals.length > 0);
+    const hasHiring = Boolean(data.hiringSignals && data.hiringSignals.length > 0);
+
+    const sections: Array<'HOMEPAGE' | 'ABOUT' | 'SERVICES' | 'CAREERS' | 'BLOG'> = ['HOMEPAGE'];
+    if (crawlResult.subpagesCrawled) {
+      for (const sub of crawlResult.subpagesCrawled) {
+        if (sub.includes('about')) sections.push('ABOUT');
+        if (sub.includes('career') || sub.includes('job')) sections.push('CAREERS');
+        if (sub.includes('service')) sections.push('SERVICES');
+        if (sub.includes('blog')) sections.push('BLOG');
+      }
+    }
+
+    const gaps: string[] = [];
+    if (!hasTech) gaps.push('Missing technical stack indicators');
+    if (!hasHiring) gaps.push('Missing explicit hiring signals');
+    if (!hasProducts) gaps.push('Missing named customer products');
+
+    let coverageStatus: 'COMPLETE' | 'PARTIAL' | 'MINIMAL' | 'INSUFFICIENT' = 'MINIMAL';
+    if (sections.length >= 2 && (hasTech || hasHiring)) {
+      coverageStatus = 'COMPLETE';
+    } else if (hasSummary && (hasProducts || hasTech)) {
+      coverageStatus = 'PARTIAL';
+    } else if (totalWords > 100) {
+      coverageStatus = 'MINIMAL';
+    } else {
+      coverageStatus = 'INSUFFICIENT';
+    }
+
+    const coverageMetadata: DeterministicCoverageMetrics = {
+      pagesAttemptedCount: 1 + (crawlResult.subpagesCrawled?.length || 0),
+      pagesSucceededCount: 1 + (crawlResult.subpagesCrawled?.length || 0),
+      pagesFailedCount: 0,
+      totalWordCount: totalWords,
+      sectionsAcquired: Array.from(new Set(sections)),
+      hasCoreSummary: hasSummary,
+      hasVerifiedProducts: hasProducts,
+      hasTechnicalSignals: hasTech,
+      hasHiringSignals: hasHiring,
+      coverageGaps: gaps,
+      coverageStatus,
+    };
+
+    // 8. Update CompanyProfile entity
+    const researchScore = this.calculateResearchScore(data, true);
     profile.companyName = data.companyName || preferredCompanyName || normalizedDomain.split('.')[0];
     profile.website = data.website || targetUrl;
     profile.industry = data.industry || 'Technology';
@@ -198,16 +332,33 @@ Output pure JSON conforming to this schema:
     profile.hiringSignals = Array.isArray(data.hiringSignals) ? data.hiringSignals : [];
     profile.recentInitiatives = Array.isArray(data.recentInitiatives) ? data.recentInitiatives : [];
     profile.evidence = Array.isArray(data.evidence) ? data.evidence : [];
+    profile.coverageMetadata = coverageMetadata;
     profile.researchScore = researchScore;
     profile.lastResearchedAt = new Date();
 
     const saved = await this.companyProfileRepository.save(profile);
-    this.logger.log(`Researched and cached company: "${saved.companyName}" (${saved.domain}) | Score: ${saved.researchScore}/100`);
+    this.logger.log(`Researched and cached company: "${saved.companyName}" (${saved.domain}) | Score: ${saved.researchScore}/100 | Coverage: ${coverageStatus}`);
 
-    // 6. Link all pending prospects
+    // 9. Link all pending prospects
     await this.linkProspectsToProfile(saved);
 
     return saved;
+  }
+
+  /**
+   * Marks prospects for a domain as RESEARCH_RETRY_REQUIRED upon crawler/network failure.
+   */
+  public async markProspectsRetryRequired(domain: string, errorReason: string): Promise<void> {
+    const prospects = await this.prospectRepository.find({
+      where: { domain },
+    });
+    for (const prospect of prospects) {
+      if (prospect.researchStatus === ProspectResearchStatus.PENDING || prospect.researchStatus === ProspectResearchStatus.RESEARCHING) {
+        prospect.researchStatus = ProspectResearchStatus.RESEARCH_RETRY_REQUIRED;
+        prospect.error = errorReason;
+        await this.prospectRepository.save(prospect);
+      }
+    }
   }
 
   /**

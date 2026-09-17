@@ -34,6 +34,7 @@ export enum ProspectResearchStatus {
   PENDING = 'PENDING',
   RESEARCHING = 'RESEARCHING',
   RESEARCHED = 'RESEARCHED',
+  RESEARCH_RETRY_REQUIRED = 'RESEARCH_RETRY_REQUIRED',
   MANUAL_REVIEW = 'MANUAL_REVIEW',
   UNSUPPORTED_CONTACT = 'UNSUPPORTED_CONTACT',
   FAILED = 'FAILED',
@@ -44,9 +45,21 @@ export enum ProspectDraftStatus {
   GENERATING = 'GENERATING',
   GENERATED = 'GENERATED',
   REVIEW_REQUIRED = 'REVIEW_REQUIRED',
+  READY_FOR_APPROVAL = 'READY_FOR_APPROVAL',
   APPROVED = 'APPROVED',
   GMAIL_DRAFT_CREATED = 'GMAIL_DRAFT_CREATED',
+  NO_SUFFICIENT_OUTREACH_ANGLE = 'NO_SUFFICIENT_OUTREACH_ANGLE',
   FAILED = 'FAILED',
+}
+
+export enum NoOutreachAngleReason {
+  NO_TECHNICAL_SIGNAL = 'NO_TECHNICAL_SIGNAL',
+  NO_DOMAIN_ALIGNMENT = 'NO_DOMAIN_ALIGNMENT',
+  GENERIC_TECH_OVERLAP_ONLY = 'GENERIC_TECH_OVERLAP_ONLY',
+  INSUFFICIENT_COMPANY_RESEARCH = 'INSUFFICIENT_COMPANY_RESEARCH',
+  INSUFFICIENT_CANDIDATE_EVIDENCE = 'INSUFFICIENT_CANDIDATE_EVIDENCE',
+  LOW_RELATIONSHIP_STRENGTH = 'LOW_RELATIONSHIP_STRENGTH',
+  NO_CREDIBLE_PERSONALIZATION = 'NO_CREDIBLE_PERSONALIZATION',
 }
 
 export enum ProspectFailureType {
@@ -126,6 +139,14 @@ export class Prospect {
     nullable: true,
   })
   failureType: ProspectFailureType | null;
+
+  @Column({
+    name: 'no_angle_reason',
+    type: 'varchar',
+    length: 50,
+    nullable: true,
+  })
+  noAngleReason: NoOutreachAngleReason | null;
 
   @Column({ type: 'text', nullable: true })
   error: string | null;

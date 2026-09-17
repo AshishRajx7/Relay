@@ -66,6 +66,9 @@ export class Campaign {
   @Column({ name: 'estimated_cost_usd', type: 'numeric', precision: 10, scale: 4, default: 0 })
   estimatedCostUsd: number;
 
+  @Column({ name: 'autonomous_gmail_staging', type: 'boolean', default: false })
+  autonomousGmailStaging: boolean;
+
   @OneToMany(() => Prospect, (prospect) => prospect.campaign)
   prospects: Prospect[];
 

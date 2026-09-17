@@ -8,10 +8,26 @@ import {
   Index,
 } from 'typeorm';
 import { Prospect } from '../../prospects/entities/prospect.entity';
+import { CompanySource } from './company-source.entity';
+import { CompanyEvidenceEntity } from './company-evidence.entity';
 
 export interface CompanyEvidence {
   source: string;
   quote: string;
+}
+
+export interface DeterministicCoverageMetrics {
+  pagesAttemptedCount: number;
+  pagesSucceededCount: number;
+  pagesFailedCount: number;
+  totalWordCount: number;
+  sectionsAcquired: Array<'HOMEPAGE' | 'ABOUT' | 'SERVICES' | 'CAREERS' | 'BLOG'>;
+  hasCoreSummary: boolean;
+  hasVerifiedProducts: boolean;
+  hasTechnicalSignals: boolean;
+  hasHiringSignals: boolean;
+  coverageGaps: string[];
+  coverageStatus: 'COMPLETE' | 'PARTIAL' | 'MINIMAL' | 'INSUFFICIENT';
 }
 
 @Entity('company_profiles')
@@ -64,6 +80,15 @@ export class CompanyProfile {
 
   @Column({ name: 'last_researched_at', type: 'timestamptz', nullable: true })
   lastResearchedAt: Date | null;
+
+  @Column({ name: 'coverage_metadata', type: 'jsonb', default: {} })
+  coverageMetadata: Partial<DeterministicCoverageMetrics>;
+
+  @OneToMany(() => CompanySource, (source) => source.companyProfile)
+  sources: CompanySource[];
+
+  @OneToMany(() => CompanyEvidenceEntity, (evidence) => evidence.companyProfile)
+  evidenceClaims: CompanyEvidenceEntity[];
 
   @OneToMany(() => Prospect, (prospect) => prospect.companyProfile)
   prospects: Prospect[];

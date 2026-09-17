@@ -2,6 +2,7 @@ export interface CompletionRequestDto {
   systemPrompt: string;
   userPrompt: string;
   feature: string; // e.g. 'RESUME_PARSE'
+  model?: string;
   maxTokens?: number;
   temperature?: number;
   metadata?: Record<string, any>;

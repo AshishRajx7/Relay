@@ -5,10 +5,13 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   OneToOne,
+  OneToMany,
   JoinColumn,
   Index,
 } from 'typeorm';
 import { ResumeFile } from './resume-file.entity';
+import { CandidateExperienceEntity } from './candidate-experience.entity';
+import { CandidateEvidenceEntity } from './candidate-evidence.entity';
 
 export interface SkillsJson {
   languages: string[];
@@ -120,6 +123,12 @@ export class CandidateProfile {
 
   @Column({ type: 'jsonb', default: { linkedin: null, github: null, portfolio: null } })
   links: LinksJson;
+
+  @OneToMany(() => CandidateExperienceEntity, (exp) => exp.candidateProfile)
+  experiences: CandidateExperienceEntity[];
+
+  @OneToMany(() => CandidateEvidenceEntity, (ev) => ev.candidateProfile)
+  evidenceClaims: CandidateEvidenceEntity[];
 
   @CreateDateColumn({ name: 'parsed_at', type: 'timestamptz' })
   parsedAt: Date;

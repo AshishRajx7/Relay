@@ -91,6 +91,9 @@ export class DraftReasoning {
   @Column({ name: 'recommended_talking_points', type: 'jsonb', default: [] })
   recommendedTalkingPoints: string[];
 
+  @Column({ name: 'no_angle_reason', length: 50, nullable: true })
+  noAngleReason: string | null;
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;
 }

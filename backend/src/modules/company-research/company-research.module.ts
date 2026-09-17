@@ -4,6 +4,8 @@ import { BullModule } from '@nestjs/bullmq';
 import { CompanyResearch } from './entities/company-research.entity';
 import { Company } from '../companies/entities/company.entity';
 import { CompanyProfile } from './entities/company-profile.entity';
+import { CompanySource } from './entities/company-source.entity';
+import { CompanyEvidenceEntity } from './entities/company-evidence.entity';
 import { Prospect } from '../prospects/entities/prospect.entity';
 import { Campaign } from '../campaigns/entities/campaign.entity';
 import { CompanyResearchService } from './company-research.service';
@@ -22,6 +24,8 @@ import { QUEUE_COMPANY_RESEARCH, QUEUE_DRAFT_GENERATION, CRAWL_PROVIDER_TOKEN } 
       CompanyResearch,
       Company,
       CompanyProfile,
+      CompanySource,
+      CompanyEvidenceEntity,
       Prospect,
       Campaign,
     ]),

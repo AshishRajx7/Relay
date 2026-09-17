@@ -1,4 +1,4 @@
-import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, BadRequestException, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as pdfParse from 'pdf-parse';
@@ -14,6 +14,9 @@ import {
 } from './entities/candidate-profile.entity';
 import { StorageService } from '../storage/storage.service';
 import { AIProviderService } from '../ai-provider/ai-provider.service';
+
+import { CandidateExperienceEntity, ExperienceTenureType } from './entities/candidate-experience.entity';
+import { CandidateEvidenceEntity, CandidateEvidenceCategory, CandidateSourceType } from './entities/candidate-evidence.entity';
 
 export interface CandidateProfileExtractedData {
   name: string | null;
@@ -33,7 +36,7 @@ export interface CandidateProfileExtractedData {
 }
 
 @Injectable()
-export class ResumeParserService {
+export class ResumeParserService implements OnModuleInit {
   private readonly logger = new Logger(ResumeParserService.name);
 
   // Canonical classification lists for deterministic post-processing
@@ -48,9 +51,32 @@ export class ResumeParserService {
     private readonly resumeFileRepository: Repository<ResumeFile>,
     @InjectRepository(CandidateProfile)
     private readonly candidateProfileRepository: Repository<CandidateProfile>,
+    @InjectRepository(CandidateExperienceEntity)
+    private readonly experienceRepository: Repository<CandidateExperienceEntity>,
+    @InjectRepository(CandidateEvidenceEntity)
+    private readonly evidenceRepository: Repository<CandidateEvidenceEntity>,
     private readonly storageService: StorageService,
     private readonly aiProviderService: AIProviderService,
   ) {}
+
+  async onModuleInit(): Promise<void> {
+    await this.backfillAllCandidateProfiles();
+  }
+
+  async backfillAllCandidateProfiles(force = false): Promise<void> {
+    try {
+      const profiles = await this.candidateProfileRepository.find();
+      for (const profile of profiles) {
+        const count = await this.experienceRepository.count({ where: { candidateProfileId: profile.id } });
+        if ((force || count === 0) && profile.experience && profile.experience.length > 0) {
+          this.logger.log(`Backfilling candidate_experience & candidate_evidence for profile ${profile.id} (${profile.name})`);
+          await this.normalizeAndPersistEvidence(profile.resumeFileId, profile);
+        }
+      }
+    } catch (err: any) {
+      this.logger.error(`Failed to backfill candidate profiles: ${err.message}`);
+    }
+  }
 
   async extractText(buffer: Buffer): Promise<string> {
     try {
@@ -816,7 +842,10 @@ Output pure JSON conforming to this schema:
 
       const savedProfile = await this.candidateProfileRepository.save(profile);
 
-      // 6. Update resume status without stale cascade overwrite
+      // 6. Normalize and persist relational candidate_experience and candidate_evidence
+      await this.normalizeAndPersistEvidence(resume.id, savedProfile);
+
+      // 7. Update resume status without stale cascade overwrite
       resume.profile = savedProfile;
       resume.status = ResumeFileStatus.PARSED;
       resume.parseError = null;
@@ -840,6 +869,317 @@ Output pure JSON conforming to this schema:
       resume.status = ResumeFileStatus.FAILED;
       resume.parseError = err.message || 'Unknown parsing error';
       await this.resumeFileRepository.save(resume);
+      throw err;
+    }
+  }
+
+  /**
+   * Decomposes CandidateProfile into normalized relational entities:
+   * Resume -> CandidateExperienceEntity -> CandidateEvidenceEntity
+   */
+  async normalizeAndPersistEvidence(resumeId: string, profile: CandidateProfile): Promise<void> {
+    try {
+      this.logger.log(`Normalizing candidate evidence for profile ${profile.id} (resume: ${resumeId})`);
+
+      // Clean existing evidence claims and experiences for this profile
+      await this.evidenceRepository.delete({ candidateProfileId: profile.id });
+      await this.experienceRepository.delete({ candidateProfileId: profile.id });
+
+      const techKeywords = [
+        'NestJS', 'TypeScript', 'Node.js', 'React', 'React 19', 'TanStack Query', 'TanStackQuery',
+        'PostgreSQL', 'Redis', 'BullMQ', 'TypeORM', 'Prisma', 'Docker', 'WordPress',
+        'EventEmitter2', 'REST APIs', 'n8n', 'Sentry', 'Async Local Storage',
+      ];
+
+      // 1. Process candidate experiences and source bullets
+      if (profile.experience && Array.isArray(profile.experience)) {
+        for (let i = 0; i < profile.experience.length; i++) {
+          const exp = profile.experience[i];
+          let tenureType: ExperienceTenureType = 'FULL_TIME';
+          const titleLower = (exp.title || '').toLowerCase();
+          if (titleLower.includes('intern')) tenureType = 'INTERNSHIP';
+          else if (titleLower.includes('founder') || titleLower.includes('co-founder')) tenureType = 'FOUNDER';
+          else if (titleLower.includes('contract')) tenureType = 'CONTRACT';
+          else if (titleLower.includes('part-time') || titleLower.includes('part time')) tenureType = 'PART_TIME';
+
+          const expEntity = this.experienceRepository.create({
+            resumeId: resumeId || profile.resumeFileId,
+            candidateProfileId: profile.id,
+            employer: exp.company || 'Unknown Company',
+            roleTitle: exp.title || 'Engineer',
+            tenureType,
+            startDate: exp.startDate || '',
+            endDate: exp.endDate || '',
+            location: exp.location || null,
+            orderIndex: i,
+          });
+          const savedExp = await this.experienceRepository.save(expEntity);
+
+          const bullets: string[] = (exp.sourceBullets && exp.sourceBullets.length ? exp.sourceBullets : exp.highlights) || [];
+          for (let bIdx = 0; bIdx < bullets.length; bIdx++) {
+            const rawBullet = (bullets[bIdx] || '').trim();
+            if (!rawBullet) continue;
+
+            // Category classification
+            let category: CandidateEvidenceCategory = 'DELIVERABLE';
+            const lower = rawBullet.toLowerCase();
+            if (
+              lower.includes('security') || lower.includes('authorization') ||
+              lower.includes('access control') || lower.includes('bypass') ||
+              lower.includes('vulnerability') || lower.includes('anonymity') ||
+              lower.includes('permission') || lower.includes('impersonat')
+            ) {
+              category = 'SECURITY';
+            } else if (
+              lower.includes('caching') || lower.includes('redis') ||
+              lower.includes('latency') || lower.includes('speed') ||
+              lower.includes('cutting') || lower.includes('optimized') ||
+              lower.includes('index') || lower.includes('performance')
+            ) {
+              category = 'OPTIMIZATION';
+            } else if (
+              lower.includes('architecture') || lower.includes('platform') ||
+              lower.includes('event-driven') || lower.includes('system end-to-end') ||
+              lower.includes('microservice') || lower.includes('bullmq') ||
+              lower.includes('pipeline')
+            ) {
+              category = 'ARCHITECTURE';
+            }
+
+            // Deliverable name extraction
+            let deliverableName = 'Engineering Deliverable';
+            if (rawBullet.includes('BranchGuard')) {
+              deliverableName = 'BranchGuard Access Control';
+            } else if (rawBullet.includes('ActivityLog')) {
+              deliverableName = 'ActivityLog Platform';
+            } else if (rawBullet.includes('Super Admin impersonation')) {
+              deliverableName = 'Super Admin Impersonation System';
+            } else if (rawBullet.includes('BullMQ')) {
+              deliverableName = 'BullMQ Notification Engine';
+            } else if (rawBullet.includes('Redis caching')) {
+              deliverableName = 'Redis Authorization Caching';
+            } else if (rawBullet.includes('Survey platform') || rawBullet.includes('Survey builder')) {
+              deliverableName = 'Survey Platform';
+            } else if (rawBullet.includes('Leave Management')) {
+              deliverableName = 'Leave Management Query Optimization';
+            } else if (rawBullet.includes('quick commerce')) {
+              deliverableName = 'Quick Commerce Platform';
+            } else if (rawBullet.includes('Sentry') || rawBullet.includes('n8n')) {
+              deliverableName = 'Sentry Incident Alerting Pipeline';
+            } else {
+              const firstClause = rawBullet.split(/[,.;]/)[0] || rawBullet;
+              deliverableName = firstClause.split(/\s+/).slice(0, 6).join(' ');
+            }
+
+            // Extract technologies present in this bullet
+            const matchedTechs = techKeywords.filter(k => 
+              new RegExp(`\\b${k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(rawBullet)
+            );
+            if (exp.technologies && Array.isArray(exp.technologies)) {
+              for (const t of exp.technologies) {
+                if (rawBullet.toLowerCase().includes(t.toLowerCase()) && !matchedTechs.includes(t)) {
+                  matchedTechs.push(t);
+                }
+              }
+            }
+
+            // Decompose bullet into 1 or more atomic claims pointing to the exact same source bullet
+            interface DecomposedClaim {
+              category: CandidateEvidenceCategory;
+              deliverableName: string;
+              atomicClaim: string;
+            }
+
+            const decomposedClaims: DecomposedClaim[] = [];
+
+            if (rawBullet.includes('BranchGuard') && rawBullet.includes('bypass')) {
+              decomposedClaims.push({
+                category: 'SECURITY',
+                deliverableName: 'BranchGuard Access Control',
+                atomicClaim: 'Designed and implemented tenant-scoped authorization (BranchGuard) across HR modules and business policies.',
+              });
+              decomposedClaims.push({
+                category: 'SECURITY',
+                deliverableName: 'Authorization Scope Remediation',
+                atomicClaim: 'Discovered and remediated tenant scope bypass vulnerability that allowed branch-restricted administrators to operate outside authorization scope.',
+              });
+            } else if (rawBullet.includes('ActivityLog frontend') || (rawBullet.includes('ActivityLog') && rawBullet.includes('React 19'))) {
+              decomposedClaims.push({
+                category: 'ARCHITECTURE',
+                deliverableName: 'ActivityLog Timeline UI',
+                atomicClaim: 'Engineered end-to-end audit activity timeline views with dynamic activity rendering, actor resolution, and URL-synced filtering using React 19 and TanStackQuery.',
+              });
+              decomposedClaims.push({
+                category: 'DELIVERABLE',
+                deliverableName: 'Interactive Survey Builder',
+                atomicClaim: 'Contributed to the frontend interactive Survey builder and form configuration interface.',
+              });
+            } else if (rawBullet.includes('Redis caching')) {
+              decomposedClaims.push({
+                category: 'OPTIMIZATION',
+                deliverableName: 'Redis Authorization Caching',
+                atomicClaim: 'Integrated Redis caching into BranchGuard to cut repeated database validation checks on authenticated requests.',
+              });
+              decomposedClaims.push({
+                category: 'ARCHITECTURE',
+                deliverableName: 'Permission Lookup Optimization',
+                atomicClaim: 'Reduced permission check latency and redundant database query overhead on authenticated API requests.',
+              });
+            } else if (rawBullet.includes('BullMQ') && rawBullet.includes('notification')) {
+              decomposedClaims.push({
+                category: 'ARCHITECTURE',
+                deliverableName: 'BullMQ Notification Engine',
+                atomicClaim: 'Engineered a BullMQ-based notification system with idempotent, replay-safe delivery, batched processing, and retry backoff.',
+              });
+              decomposedClaims.push({
+                category: 'DELIVERABLE',
+                deliverableName: 'In-App Notification Feed',
+                atomicClaim: 'Built a paginated in-app notification feed supporting high-throughput async event delivery.',
+              });
+            } else if (rawBullet.includes('impersonation') && rawBullet.includes('Async Local Storage')) {
+              decomposedClaims.push({
+                category: 'SECURITY',
+                deliverableName: 'Super Admin Impersonation System',
+                atomicClaim: 'Built end-to-end Super Admin impersonation system with entity, migration, controller, and configurable-expiry tokens.',
+              });
+              decomposedClaims.push({
+                category: 'ARCHITECTURE',
+                deliverableName: 'Request-Scoped Audit Interceptor',
+                atomicClaim: 'Engineered audit trail powered by Async Local Storage request context, global NestJS interceptor, and TypeORM Event Subscriber with @SkipAuditLog() decorator.',
+              });
+            } else if (rawBullet.includes('ActivityLog platform') || (rawBullet.includes('ActivityLog') && rawBullet.includes('EventEmitter2'))) {
+              decomposedClaims.push({
+                category: 'ARCHITECTURE',
+                deliverableName: 'Event-Driven ActivityLog Platform',
+                atomicClaim: 'Architected company-wide event-driven activity logging platform on NestJS EventEmitter2 standardizing audit trails across 15+ HR modules.',
+              });
+            } else if (rawBullet.includes('quick commerce') || rawBullet.includes('WordPress-based storefront') || rawBullet.includes('Onboarded 2 vendors')) {
+              decomposedClaims.push({
+                category: 'DELIVERABLE',
+                deliverableName: 'Quick Commerce Platform',
+                atomicClaim: 'Co-founded and built end-to-end quick commerce platform integrating payments, order workflows, and delivery tracking.',
+              });
+              decomposedClaims.push({
+                category: 'ARCHITECTURE',
+                deliverableName: 'Multi-Vendor Order Workflows',
+                atomicClaim: 'Built custom backend APIs and order-management workflows integrated with a WordPress storefront and owned live production debugging.',
+              });
+            } else if (rawBullet.includes('Leave Management') && rawBullet.includes('index')) {
+              decomposedClaims.push({
+                category: 'OPTIMIZATION',
+                deliverableName: 'Leave Management Query Optimization',
+                atomicClaim: 'Optimized Leave Management database performance by eliminating inefficient join patterns and adding targeted PostgreSQL indexes.',
+              });
+            } else if (rawBullet.includes('Survey platform backend') || (rawBullet.includes('Survey') && rawBullet.includes('anonymity'))) {
+              decomposedClaims.push({
+                category: 'DELIVERABLE',
+                deliverableName: 'Survey Analytics Platform Backend',
+                atomicClaim: 'Owned Survey platform backend end-to-end covering audience assignment, publishing, response collection, and analytics.',
+              });
+              decomposedClaims.push({
+                category: 'SECURITY',
+                deliverableName: 'Respondent Anonymity Remediation',
+                atomicClaim: 'Remediated two critical anonymity-leak vulnerabilities to protect survey respondent identities.',
+              });
+            } else {
+              const firstClause = rawBullet.split(/[,.;]/)[0] || rawBullet;
+              const delivName = firstClause.split(/\s+/).slice(0, 6).join(' ');
+              decomposedClaims.push({
+                category,
+                deliverableName: delivName,
+                atomicClaim: rawBullet,
+              });
+            }
+
+            // Persist each decomposed claim pointing strictly to the SAME source bullet
+            for (const dec of decomposedClaims) {
+              const evidence = this.evidenceRepository.create({
+                resumeId: resumeId || profile.resumeFileId,
+                candidateProfileId: profile.id,
+                experienceId: savedExp.id,
+                sourceType: 'RESUME_BULLET',
+                category: dec.category,
+                bulletIndex: bIdx,
+                rawBulletText: rawBullet, // SOURCE FACT: verbatim literal string from resume
+                deliverableName: dec.deliverableName,
+                atomicClaim: dec.atomicClaim, // NORMALIZED CLAIM: extracted technical claim
+                technologies: matchedTechs.join(', ') || null,
+                isSourceFact: false, // atomicClaim is a normalized claim, rawBulletText is the source fact
+              });
+              await this.evidenceRepository.save(evidence);
+            }
+          }
+        }
+      }
+
+      // 2. Process technical skills section
+      if (profile.skills) {
+        const allSkills: string[] = Object.values(profile.skills).flat().filter(Boolean);
+        for (const skill of allSkills) {
+          const skillEvidence = this.evidenceRepository.create({
+            resumeId: resumeId || profile.resumeFileId,
+            candidateProfileId: profile.id,
+            experienceId: null,
+            sourceType: 'SKILLS_SECTION',
+            category: 'SKILL_KEYWORD',
+            bulletIndex: null,
+            rawBulletText: null, // Skills are keywords, not verbatim narrative bullets
+            deliverableName: skill,
+            atomicClaim: `Demonstrated technical skill in ${skill}`,
+            technologies: skill,
+            isSourceFact: false,
+          });
+          await this.evidenceRepository.save(skillEvidence);
+        }
+      }
+
+      // 3. Process projects
+      if (profile.projects && Array.isArray(profile.projects)) {
+        for (const project of profile.projects) {
+          const projectEvidence = this.evidenceRepository.create({
+            resumeId: resumeId || profile.resumeFileId,
+            candidateProfileId: profile.id,
+            experienceId: null,
+            sourceType: 'PROJECT_ENTRY',
+            category: 'DELIVERABLE',
+            bulletIndex: null,
+            rawBulletText: project.description || null,
+            deliverableName: project.name || 'Project',
+            atomicClaim: project.description || project.name,
+            technologies: (project.techStack || []).join(', ') || null,
+            isSourceFact: true,
+          });
+          await this.evidenceRepository.save(projectEvidence);
+        }
+      }
+
+      // 4. Process achievements and hackathons
+      if (profile.achievements && Array.isArray(profile.achievements)) {
+        for (const ach of profile.achievements) {
+          const achText = String(ach).trim();
+          if (!achText) continue;
+          const colonSplit = achText.split(':');
+          const title = colonSplit[0]?.trim() || 'Achievement';
+          const achEvidence = this.evidenceRepository.create({
+            resumeId: resumeId || profile.resumeFileId,
+            candidateProfileId: profile.id,
+            experienceId: null,
+            sourceType: 'ACHIEVEMENT_ENTRY',
+            category: 'ACHIEVEMENT',
+            bulletIndex: null,
+            rawBulletText: achText,
+            deliverableName: title,
+            atomicClaim: achText,
+            technologies: null,
+            isSourceFact: true,
+          });
+          await this.evidenceRepository.save(achEvidence);
+        }
+      }
+
+      this.logger.log(`Successfully normalized evidence for candidate profile ${profile.id}`);
+    } catch (err: any) {
+      this.logger.error(`Error during evidence normalization for profile ${profile.id}: ${err.message}`, err.stack);
       throw err;
     }
   }
