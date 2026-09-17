@@ -167,52 +167,45 @@ export class DraftQualityService {
   }
 
   public static readonly FORBIDDEN_OUTREACH_PHRASES: string[] = [
-    // V6.1 Absolutely Forbidden Content
+    // Forbidden Outreach Phrases & Generic AI Filler
     "saw what you're building",
-    "job openings",
-    "backend openings",
-    "engineering openings",
-    "current or future opportunities",
-    "current or future openings",
-    "current or future",
-    "current and future",
+    "would appreciate your consideration",
     "would appreciate consideration",
+    "please review my resume",
+    "looking forward to hearing from you",
+    "please find my resume attached",
+    "kindly review the attached resume",
+    "i request you to review my resume",
+    "thank you for your time and consideration",
+    "thank you for your time",
+    "i am excited to apply",
+    "i'm excited to apply",
+    "i believe i would be a great fit",
+    "i believe i'd be a great fit",
+    "i am passionate about",
+    "i'm passionate about",
     "reaching out regarding",
     "reaching out about",
     "caught my attention",
-    "aligns with my experience",
-    "aligns with my background",
-    "aligns with",
-    "relevant to my experience",
-    "relevant to my background",
-    "very relevant",
-    "directly relevant",
     "particularly drawn to",
     "resonates with me",
     "resonates with how",
-    "resonates with",
-    "excited about",
     "opportunity to discuss",
-    "conversation",
-    "call",
-    "meeting",
-    "chat",
-    "connect",
+    "introductory conversation",
+    "schedule a conversation",
+    "hop on a call",
+    "quick call",
+    "brief call",
+    "coffee chat",
+    "would love to chat",
+    "love to chat",
+    "happy to chat",
+    "let's connect",
+    "happy to connect",
+    "explore synergies",
     "follow up",
     "circle back",
     "touch base",
-    "would love to chat",
-    "love to chat",
-    "let's connect",
-    "happy to connect",
-    "happy to chat",
-    "thank you for your time",
-    "introductory conversation",
-    "brief call",
-    "quick call",
-    "coffee chat",
-    "explore synergies",
-    "looking forward to hearing from you",
 
     // V5 AI Writing Patterns
     "additionally",
@@ -260,7 +253,6 @@ export class DraftQualityService {
     "i am inspired by",
     "i've observed that",
     "i observed that",
-    "my experience aligns with",
     "goklaim",
     "final year student",
     "pursuing degree",
@@ -268,6 +260,20 @@ export class DraftQualityService {
     "july 2026",
     "graduated",
     "cgpa",
+    "i am excited to apply",
+    "i'm excited to apply",
+    "i believe i would be a great fit",
+    "i believe i'd be a great fit",
+    "i am passionate about",
+    "i'm passionate about",
+    "i would appreciate your consideration",
+    "i'd appreciate your consideration",
+    "please review my resume",
+    "looking forward to hearing from you",
+    "please find my resume attached",
+    "kindly review the attached resume",
+    "i request you to review my resume",
+    "thank you for your time and consideration",
   ];
 
   public static readonly MANDATORY_SUBJECT_KEYWORDS: string[] = [
@@ -293,12 +299,6 @@ export class DraftQualityService {
     /\bquick introduction\b/i,
     /\binterested in connecting\b/i,
     /\blet's talk\b/i,
-    /\bapplication\b/i,
-    /\bopportunit(?:y|ies)\b/i,
-    /\bjob\s+inquiry\b/i,
-    /\bseeking\b/i,
-    /\bposition\b/i,
-    /\bexploring\b/i,
   ];
 
   public static hasMandatorySubjectKeyword(subject: string): boolean {
@@ -374,25 +374,21 @@ export class DraftQualityService {
   public hasForbiddenCta(body: string): boolean {
     if (!body) return false;
     const lower = body.toLowerCase();
-    const pattern = /\b(?:(?:open\s+to|time\s+for|schedule|grab)\s+(?:a\s+)?(?:call|chat|coffee|meeting|conversation)|(?:hop\s+on\s+a\s+call)|(?:let\s+me\s+know\s+if\s+you(?:'d|\s+would)?\s+be\s+open)|(?:look(?:ing)?\s+forward\s+to\s+hearing)|(?:would\s+love\s+to\s+(?:talk|chat|connect|speak))|(?:happy\s+to\s+talk)|(?:brief\s+call)|(?:quick\s+call)|(?:coffee\s+chat)|(?:introductory\s+conversation)|(?:introductory\s+call)|(?:would\s+appreciate\s+consideration)|(?:opportunity\s+to\s+discuss)|(?:follow\s+up)|(?:circle\s+back)|(?:touch\s+base))\b/i;
+    const pattern = /\b(?:(?:open\s+to|time\s+for|schedule|grab)\s+(?:a\s+)?(?:call|chat|coffee|meeting)|(?:hop\s+on\s+a\s+call)|(?:let\s+me\s+know\s+if\s+you(?:'d|\s+would)?\s+be\s+open)|(?:look(?:ing)?\s+forward\s+to\s+hearing)|(?:would\s+love\s+to\s+(?:talk|chat|connect|speak))|(?:happy\s+to\s+talk)|(?:brief\s+call)|(?:quick\s+call)|(?:coffee\s+chat)|(?:introductory\s+conversation)|(?:introductory\s+call)|(?:follow\s+up)|(?:circle\s+back)|(?:touch\s+base))\b/i;
     return pattern.test(lower);
   }
 
   public static hasSignatureOrClosingSentence(body: string): boolean {
     if (!body) return false;
-    const paragraphs = body.split(/\n\s*\n/).filter(Boolean);
-    if (paragraphs.length !== 4) return true; // V6.1 requires exactly 4 paragraphs
-    const lastP = paragraphs[3].trim();
-    const validEndings = ['Resume attached.', "I've attached my resume.", 'Attached my resume.'];
-    if (!validEndings.includes(lastP)) return true;
-    return /\b(?:thank\s+you|thanks|best\s+regards|best,|regards,|cheers|sincerely)\b/i.test(body);
+    // Disallow corporate fluff sign-offs like "Thank you for your time", "Looking forward", etc.
+    return /\b(?:thank\s+you\s+for\s+your\s+time|looking\s+forward\s+to\s+hearing|cheers|sincerely)\b/i.test(body);
   }
 
   public hasRoleIntent(body: string): boolean {
     if (!body) return false;
     const lower = body.toLowerCase();
     const rolePattern =
-      /\b(?:(?:backend|software|systems?|platform)\s+(?:engineer|systems?|services?|infrastructure|apis?)|work\s+on\s+backend|building\s+(?:backend\s+)?apis?|databases?\s+and\s+(?:internal\s+)?services?)\b/i;
+      /\b(?:(?:backend|software|systems?|platform)\s+(?:engineer|developer|systems?|services?|infrastructure|apis?)|work\s+on\s+backend|building\s+(?:backend\s+)?apis?|databases?\s+and\s+(?:internal\s+)?services?)\b/i;
     const companyPattern = /the\s+ninja\s+studio/i;
     return rolePattern.test(lower) && companyPattern.test(lower);
   }
@@ -400,7 +396,7 @@ export class DraftQualityService {
   public hasResumeMention(body: string): boolean {
     if (!body) return false;
     const lower = body.toLowerCase();
-    const pattern = /\b(?:(?:attached\s+(?:is\s+)?(?:my\s+)?resume)|(?:resume\s+(?:is\s+)?attached)|(?:attached\s+my\s+cv)|(?:my\s+resume\s+is\s+attached)|(?:find\s+attached\s+my\s+resume)|(?:i've\s+attached\s+my\s+resume)|(?:have\s+attached\s+my\s+resume)|(?:i\s+have\s+attached\s+my\s+resume)|(?:attached\s+my\s+resume\s+for\s+review)|(?:attached\s+my\s+resume\s+in\s+case)|(?:attached\s+my\s+resume\s+below)|(?:attached\s+my\s+resume\s+here)|(?:resume\s+is\s+attached\s+below))\b/i;
+    const pattern = /\b(?:(?:attached\s+(?:is\s+)?(?:my\s+)?resume)|(?:resume\s+(?:is\s+)?attached)|(?:attached\s+my\s+cv)|(?:my\s+resume\s+is\s+attached)|(?:find\s+attached\s+my\s+resume)|(?:i've\s+attached\s+my\s+resume)|(?:have\s+attached\s+my\s+resume)|(?:i\s+have\s+attached\s+my\s+resume)|(?:attached\s+my\s+resume\s+for\s+review)|(?:attached\s+my\s+resume\s+in\s+case)|(?:attached\s+my\s+resume\s+below)|(?:attached\s+my\s+resume\s+here)|(?:resume\s+is\s+attached\s+below)|(?:i've\s+included\s+my\s+resume)|(?:included\s+my\s+resume)|(?:attached\s+my\s+resume\s+for\s+context))\b/i;
     return pattern.test(lower);
   }
 
@@ -426,7 +422,7 @@ export class DraftQualityService {
 
   /**
    * Evaluates draft quality across 5 dimensions and applies hard safety rejection rules.
-   * Calibrated for Relay Outreach V6.1 to optimize human engineer tone and application replies.
+   * Calibrated for Relay Outreach to optimize human engineer tone and application replies.
    */
   public evaluateDraft(
     subject: string,
@@ -439,7 +435,6 @@ export class DraftQualityService {
     const companyNameLower = company?.companyName ? company.companyName.toLowerCase() : '';
 
     // 1. Personalization Score (0-100)
-    // V6.1 Rule: Conversational observational company sentence. Candidate is > 80%.
     let personalizationScore = 40;
     if (companyNameLower && lowerBody.includes(companyNameLower)) personalizationScore += 30; // Mentions company
     if (company?.products && company.products.some((p) => lowerBody.includes(p.toLowerCase()))) {
@@ -462,16 +457,16 @@ export class DraftQualityService {
       }
     }
     const wordCount = body.split(/\s+/).filter(Boolean).length;
-    if (wordCount > 95) {
+    if (wordCount > 130) {
       spamRiskScore += 25;
       flags.push('EXCESSIVE_WORD_COUNT');
-    } else if (wordCount < 50) {
+    } else if (wordCount < 40) {
       spamRiskScore += 25;
       flags.push('TOO_SHORT');
     }
 
     const paragraphs = body.split(/\n\s*\n/).filter(Boolean);
-    if (paragraphs.length !== 4) {
+    if (paragraphs.length > 6 || paragraphs.length < 3) {
       flags.push('INVALID_PARAGRAPH_COUNT');
     }
     if (DraftQualityService.hasSignatureOrClosingSentence(body)) {
@@ -636,9 +631,10 @@ export class DraftQualityService {
     // forbidden phrases, missing job intent, or networking/consulting tone.
     const requiresManualReview =
       spamRiskScore > 30 ||
-      wordCount > 95 ||
-      wordCount < 50 ||
-      paragraphs.length !== 4 ||
+      wordCount > 130 ||
+      wordCount < 40 ||
+      paragraphs.length > 6 ||
+      paragraphs.length < 3 ||
       DraftQualityService.hasSignatureOrClosingSentence(body) ||
       hasGroundingViolation ||
       Boolean(forbiddenPhrase) ||

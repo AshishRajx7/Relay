@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, Logger } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Company } from './entities/company.entity';
@@ -33,6 +33,9 @@ export class CompaniesService {
    * Retrieves a single company by ID with its full research record and contact count.
    */
   async findOne(id: string): Promise<CompanyResponseDto> {
+    if (!id || typeof id !== 'string' || !id.trim()) {
+      throw new BadRequestException('Invalid company ID provided');
+    }
     const company = await this.companyRepository.findOne({
       where: { id },
       relations: ['contacts', 'researches'],
@@ -49,6 +52,9 @@ export class CompaniesService {
    * Finds a company by its website URL or domain.
    */
   async findByDomain(domainOrUrl: string): Promise<Company | null> {
+    if (!domainOrUrl || typeof domainOrUrl !== 'string' || !domainOrUrl.trim()) {
+      return null;
+    }
     const normalizedDomain = this.domainNormalizerService.normalize(domainOrUrl);
     return await this.companyRepository.findOne({
       where: { normalizedDomain },

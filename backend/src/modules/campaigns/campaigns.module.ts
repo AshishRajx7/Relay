@@ -4,6 +4,7 @@ import { BullModule } from '@nestjs/bullmq';
 import { Campaign } from './entities/campaign.entity';
 import { Prospect } from '../prospects/entities/prospect.entity';
 import { CandidateProfile } from '../resume/entities/candidate-profile.entity';
+import { ResumeFile } from '../resume/entities/resume-file.entity';
 import { CompanyProfile } from '../company-research/entities/company-profile.entity';
 import { CampaignsService } from './campaigns.service';
 import { CampaignIngestionService } from './services/campaign-ingestion.service';
@@ -14,7 +15,7 @@ import { QUEUE_COMPANY_RESEARCH, QUEUE_DRAFT_GENERATION } from '../../common/con
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Campaign, Prospect, CandidateProfile, CompanyProfile]),
+    TypeOrmModule.forFeature([Campaign, Prospect, CandidateProfile, CompanyProfile, ResumeFile]),
     BullModule.registerQueue(
       { name: QUEUE_COMPANY_RESEARCH },
       { name: QUEUE_DRAFT_GENERATION },

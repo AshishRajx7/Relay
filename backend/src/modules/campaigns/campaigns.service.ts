@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, Logger } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { InjectQueue } from '@nestjs/bullmq';
@@ -12,6 +12,7 @@ import {
   ProspectFailureType,
   ContactType,
 } from '../prospects/entities/prospect.entity';
+import { ResumeFile, ResumeFileStatus } from '../resume/entities/resume-file.entity';
 import { CreateCampaignDto } from './dto/create-campaign.dto';
 import {
   QUEUE_COMPANY_RESEARCH,
@@ -55,6 +56,8 @@ export class CampaignsService {
     private readonly campaignRepository: Repository<Campaign>,
     @InjectRepository(CandidateProfile)
     private readonly candidateProfileRepository: Repository<CandidateProfile>,
+    @InjectRepository(ResumeFile)
+    private readonly resumeFileRepository: Repository<ResumeFile>,
     @InjectRepository(Prospect)
     private readonly prospectRepository: Repository<Prospect>,
     @InjectQueue(QUEUE_COMPANY_RESEARCH)
@@ -64,16 +67,62 @@ export class CampaignsService {
   ) {}
 
   async createCampaign(dto: CreateCampaignDto): Promise<Campaign> {
-    const profile = await this.candidateProfileRepository.findOne({
-      where: { id: dto.candidateProfileId },
-    });
-    if (!profile) {
-      throw new NotFoundException(`Candidate profile with ID ${dto.candidateProfileId} not found`);
+    let profile: CandidateProfile | null = null;
+
+    if (dto.candidateProfileId) {
+      // Scenario A: Candidate profile ID explicitly supplied
+      profile = await this.candidateProfileRepository.findOne({
+        where: { id: dto.candidateProfileId },
+        relations: ['resumeFile'],
+      });
+
+      // Check if ID was a resume_file.id
+      if (!profile) {
+        const resumeFile = await this.resumeFileRepository.findOne({
+          where: { id: dto.candidateProfileId },
+          relations: ['profile'],
+        });
+
+        if (resumeFile) {
+          if (resumeFile.profile) {
+            profile = resumeFile.profile;
+          } else {
+            // Resume exists but candidate profile missing / not processed
+            throw new BadRequestException('Selected resume has not been processed yet.');
+          }
+        }
+      }
+
+      // Check if linked resume file is parsed
+      if (profile && profile.resumeFile && profile.resumeFile.status !== ResumeFileStatus.PARSED) {
+        throw new BadRequestException('Selected resume has not been processed yet.');
+      }
+
+      if (!profile) {
+        throw new BadRequestException(
+          'Selected resume profile no longer exists. Please refresh and select a resume again.',
+        );
+      }
+    } else {
+      // Scenario B: candidateProfileId omitted, find latest profile safely
+      const profiles = await this.candidateProfileRepository.find({
+        order: { updatedAt: 'DESC' },
+        take: 1,
+      });
+
+      profile = profiles[0] ?? null;
+
+      // Scenario C: No profiles exist
+      if (!profile) {
+        throw new BadRequestException(
+          'No candidate profile available. Upload a resume first.',
+        );
+      }
     }
 
     const campaign = this.campaignRepository.create({
       name: dto.name.trim(),
-      candidateProfileId: dto.candidateProfileId,
+      candidateProfileId: profile.id,
       status: CampaignStatus.CREATED,
       totalProspects: 0,
       completedProspects: 0,
@@ -94,6 +143,9 @@ export class CampaignsService {
   }
 
   async findOne(id: string): Promise<Campaign> {
+    if (!id || typeof id !== 'string' || !id.trim()) {
+      throw new BadRequestException('Invalid campaign ID provided');
+    }
     const campaign = await this.campaignRepository.findOne({
       where: { id },
       relations: ['candidateProfile'],

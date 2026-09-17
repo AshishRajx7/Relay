@@ -133,9 +133,12 @@ export class GmailService {
     // Look up in database if candidateProfileId provided or fallback to latest DB account
     let dbAccount: GmailAccount | null = null;
     try {
-      dbAccount = profileId
-        ? await this.gmailAccountRepository.findOne({ where: { candidateProfileId: profileId } })
-        : await this.gmailAccountRepository.findOne({ where: {}, order: { connectedAt: 'DESC' } });
+      if (profileId) {
+        dbAccount = await this.gmailAccountRepository.findOne({ where: { candidateProfileId: profileId } });
+      } else {
+        const accounts = await this.gmailAccountRepository.find({ order: { connectedAt: 'DESC' }, take: 1 });
+        dbAccount = accounts[0] ?? null;
+      }
     } catch (dbErr: any) {
       this.logger.warn(`[DEBUG] gmail_accounts lookup failed: ${dbErr.message}`);
     }
@@ -410,7 +413,8 @@ export class GmailService {
     }
 
     if (!account) {
-      account = await this.gmailAccountRepository.findOne({ where: {}, order: { connectedAt: 'DESC' } });
+      const accounts = await this.gmailAccountRepository.find({ order: { connectedAt: 'DESC' }, take: 1 });
+      account = accounts[0] ?? null;
     }
 
     if (!account) {
@@ -444,7 +448,8 @@ export class GmailService {
     }
 
     if (!account) {
-      account = await this.gmailAccountRepository.findOne({ where: {}, order: { connectedAt: 'DESC' } });
+      const accounts = await this.gmailAccountRepository.find({ order: { connectedAt: 'DESC' }, take: 1 });
+      account = accounts[0] ?? null;
     }
 
     if (!account) {

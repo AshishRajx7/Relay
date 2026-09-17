@@ -301,6 +301,163 @@ export class ResumeParserService {
               experienceType = 'CONTRACT';
             }
 
+            const sourceBullets = Array.isArray(exp.sourceBullets) && exp.sourceBullets.length > 0
+              ? exp.sourceBullets.map(String).map((s: string) => s.trim()).filter((s: string) => s.length > 0)
+              : (Array.isArray(exp.highlights)
+                  ? exp.highlights.map(String).map((s: string) => s.trim()).filter((s: string) => s.length > 0)
+                  : []);
+
+            const highlights = Array.isArray(exp.highlights) && exp.highlights.length > 0
+              ? exp.highlights.map(String).map((s: string) => s.trim()).filter((s: string) => s.length > 0)
+              : sourceBullets;
+
+            const allCandidateSkills = [
+              ...languages,
+              ...frameworks,
+              ...databases,
+              ...tools,
+              ...other,
+            ];
+
+            // Build role-scoped grounding text
+            const roleGroundingText = [
+              exp.company,
+              title,
+              ...sourceBullets,
+              ...highlights,
+            ].join(' ').toLowerCase();
+
+            // Strict Anti-Contamination Check
+            // Projects, systems, and concepts must NOT cross employment boundaries
+            const highRiskForeignConcepts = [
+              'branchguard',
+              'branch guard',
+              'branch-access',
+              'super admin',
+              'superadmin',
+              'asynclocalstorage',
+              'eventemitter2',
+              'leave management',
+              'survey platform',
+              'survey builder',
+              'bullmq',
+              'sentry-to-slack',
+              'sentry',
+              'dependabot',
+              'redis caching',
+              'audit log',
+              'quick commerce',
+              'quick-commerce',
+              'wordpress',
+              'anonymity-leak',
+              'anonymity leak',
+            ];
+
+            const isGroundedInRole = (item: string): boolean => {
+              if (!item || typeof item !== 'string' || item.trim().length === 0) return false;
+              const lower = item.toLowerCase();
+
+              // If the item mentions a specific high-risk concept, verify it is genuinely in this role's text
+              for (const concept of highRiskForeignConcepts) {
+                if (lower.includes(concept) && !roleGroundingText.includes(concept)) {
+                  return false; // Contaminated from another role!
+                }
+              }
+
+              return true;
+            };
+
+            // 1. What Was Built (strictly role-scoped)
+            let whatWasBuilt: string[] = [];
+            if (Array.isArray(exp.whatWasBuilt) && exp.whatWasBuilt.length > 0) {
+              whatWasBuilt = exp.whatWasBuilt
+                .map(String)
+                .map((s: string) => s.trim())
+                .filter((s: string) => s.length > 0)
+                .filter(isGroundedInRole);
+            }
+            if (whatWasBuilt.length === 0) {
+              whatWasBuilt = sourceBullets
+                .filter((b: string) => /built|architected|developed|engineered|created|implemented|designed|co-founded/i.test(b))
+                .filter(isGroundedInRole);
+            }
+
+            // 2. Scale & Ownership (strictly role-scoped)
+            let scaleAndOwnership: string[] = [];
+            if (Array.isArray(exp.scaleAndOwnership) && exp.scaleAndOwnership.length > 0) {
+              scaleAndOwnership = exp.scaleAndOwnership
+                .map(String)
+                .map((s: string) => s.trim())
+                .filter((s: string) => s.length > 0)
+                .filter(isGroundedInRole);
+            }
+            if (scaleAndOwnership.length === 0) {
+              scaleAndOwnership = sourceBullets
+                .filter((b: string) => /owned|led|infrastructure|platform|pipeline|distributed|scale|system|security|rbac|events|onboarded|debugging|remediated|vulnerabilities/i.test(b))
+                .filter(isGroundedInRole);
+            }
+
+            // If whatWasBuilt and scaleAndOwnership are identical and have multiple items, de-duplicate cleanly
+            if (whatWasBuilt.length > 1 && scaleAndOwnership.length > 1 && whatWasBuilt[0] === scaleAndOwnership[0]) {
+              const ownershipOnly = scaleAndOwnership.filter((s) => /owned|onboarded|debugging|remediated|vulnerabilities|led/i.test(s));
+              if (ownershipOnly.length > 0) {
+                scaleAndOwnership = ownershipOnly;
+                whatWasBuilt = whatWasBuilt.filter((w) => !ownershipOnly.includes(w) || /co-founded|built/i.test(w));
+              }
+            }
+
+            // 3. Measurable Impact (quantitative gains explicitly stated in THIS role only)
+            const measurableImpactRegex = /\d+%|\d+x|\d+ms|reduced|optimized|latency|throughput|saved|eliminated|cutting repeated|improving/i;
+            let measurableImpact: string[] = [];
+            if (Array.isArray(exp.measurableImpact) && exp.measurableImpact.length > 0) {
+              measurableImpact = exp.measurableImpact
+                .map(String)
+                .map((s: string) => s.trim())
+                .filter((s: string) => s.length > 0)
+                .filter(isGroundedInRole)
+                .filter((s: string) => measurableImpactRegex.test(s));
+            }
+            if (measurableImpact.length === 0) {
+              measurableImpact = sourceBullets
+                .filter((b: string) => measurableImpactRegex.test(b))
+                .filter(isGroundedInRole);
+            }
+            // If no genuine measurable impact exists in this role (e.g. D'Rons), keep it as EMPTY ARRAY []!
+
+            // 4. Technologies (strictly role-scoped, NEVER fallback to candidate-wide skills)
+            const matchesRoleText = (tech: string): boolean => {
+              if (!tech || tech.trim().length === 0) return false;
+              const escaped = tech.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+              const regex = new RegExp(`(^|[^a-zA-Z0-9])${escaped}([^a-zA-Z0-9]|$)`, 'i');
+              return regex.test(roleGroundingText);
+            };
+
+            let roleTechs: string[] = [];
+            if (Array.isArray(exp.technologies) && exp.technologies.length > 0) {
+              roleTechs = exp.technologies
+                .map(String)
+                .map((t: string) => t.trim())
+                .filter((t: string) => t.length > 0)
+                .filter(matchesRoleText);
+            }
+
+            // Include candidate skills only if explicitly mentioned with whole-word boundaries in this role's grounding text
+            for (const skill of allCandidateSkills) {
+              if (matchesRoleText(skill) && !roleTechs.some((t) => t.toLowerCase() === skill.toLowerCase())) {
+                roleTechs.push(skill);
+              }
+            }
+
+            // Check for specific technologies mentioned in role text
+            if (/wordpress/i.test(roleGroundingText) && !roleTechs.some((t) => /wordpress/i.test(t))) {
+              roleTechs.push('WordPress');
+            }
+            if (/backend apis|custom backend apis|\bapis\b/i.test(roleGroundingText) && !roleTechs.some((t) => /api/i.test(t))) {
+              roleTechs.push('REST APIs');
+            }
+
+            roleTechs = Array.from(new Set(roleTechs));
+
             return {
               company: String(exp.company).trim(),
               title,
@@ -310,7 +467,12 @@ export class ResumeParserService {
               experienceType,
               isFounder,
               founderType: isFounder ? (exp.founderType || (/co-founder/i.test(title) ? 'CO_FOUNDER' : 'FOUNDER')) : null,
-              highlights: Array.isArray(exp.highlights) ? exp.highlights.map(String).filter((h: string) => h.trim().length > 0) : [],
+              sourceBullets,
+              highlights: highlights.length > 0 ? highlights : sourceBullets,
+              whatWasBuilt,
+              scaleAndOwnership,
+              measurableImpact,
+              technologies: roleTechs,
             };
           })
       : [];
@@ -458,22 +620,33 @@ export class ResumeParserService {
 
   async parseWithAi(rawText: string, metadata?: Record<string, any>): Promise<CandidateProfileExtractedData> {
     const systemPrompt = `You are a Senior AI Resume Intelligence Architect.
-Your task is to parse resume text and produce a rich, high-fidelity JSON object with ZERO hallucination, accurate technology taxonomy, normalized dates, and first-class founder experience classification.
+Your task is to parse resume text and produce a rich, high-fidelity JSON object with ZERO hallucination, accurate technology taxonomy, normalized dates, first-class founder experience classification, and STRICT EMPLOYMENT SCOPING.
 
 Strict Extraction Instructions:
 
-1. PROMOTIONS & CONSECUTIVE ROLES (CRITICAL):
+1. STRICT EMPLOYMENT SCOPING & ZERO CROSS-ROLE CONTAMINATION (CRITICAL):
+- Every employment entry in "experience" must be extracted completely independently.
+- SCOPING: Each experience entry's fields ("sourceBullets", "highlights", "whatWasBuilt", "scaleAndOwnership", "measurableImpact", "technologies") MUST be derived EXCLUSIVELY from the text and bullet points appearing directly under that specific role's header in the resume.
+- NEVER copy, leak, or infer achievements, projects, systems, or responsibilities from one employer or role into another. For example, systems or achievements like BranchGuard, Redis caching, Activity Log platform, Leave Management optimization, or Super Admin impersonation belong ONLY to the specific role where they are explicitly described; NEVER attribute them to D'Rons or any other employer.
+- ZERO INFERENCE FROM GLOBAL SKILLS: Never infer technologies for an experience entry from the "TECHNICAL SKILLS" section or candidate-wide skills unless that technology is explicitly mentioned in that specific role's text or bullets.
+- "sourceBullets": Extract the EXACT, verbatim bullet points from the resume for this specific role. DO NOT modify, summarize, or omit bullets.
+- "measurableImpact": If this specific role does NOT contain measurable metrics or quantitative gains in its bullets, return [] (EMPTY ARRAY). NEVER hallucinate, copy from another role, or invent numbers!
+- "whatWasBuilt": Systems, platforms, services, or features specifically built in THIS role based ONLY on its sourceBullets. If none, return [].
+- "scaleAndOwnership": Ownership scope, architecture, or responsibilities in THIS role. If none, return [].
+- "technologies": ONLY technologies, frameworks, libraries, databases, and tools explicitly mentioned in THIS role's text or bullets.
+
+2. PROMOTIONS & CONSECUTIVE ROLES (CRITICAL):
 - When a candidate was promoted or held multiple roles at the same company (e.g. Intern followed by Full-Time), each role MUST have its own independent startDate and endDate according to its own role header.
 - Example: "The Ninja Studio — Software Engineer Aug 2026 – Present" -> startDate: "2026-08", endDate: "Present".
 - "The Ninja Studio — Backend Engineering Intern Feb 2026 – Aug 2026" -> startDate: "2026-02", endDate: "2026-08".
-- NEVER copy the internship start date to the promoted full-time role.
+- NEVER copy the internship start date to the promoted full-time role. Treat them as two distinct experience records.
 
-2. FOUNDER & STARTUP EXPERIENCE:
+3. FOUNDER & STARTUP EXPERIENCE:
 - All Founder, Co-Founder, Founding Engineer, Startup Lead, Entrepreneur, and Self-Employed roles demonstrating product development, API design, payment integration, or vendor management MUST be classified as professional experience in "experience".
 - Set "experienceType": "FOUNDER" and "isFounder": true for such roles.
 - For all other roles, set "experienceType" to "FULL_TIME", "INTERNSHIP", "CONTRACT", or "FREELANCE".
 
-3. DATE NORMALIZATION (ISO YYYY-MM):
+4. DATE NORMALIZATION (ISO YYYY-MM):
 - Convert all dates into ISO "YYYY-MM" or "YYYY" format:
   * "Aug 2026" -> "2026-08"
   * "Feb 2026" -> "2026-02"
@@ -481,7 +654,7 @@ Strict Extraction Instructions:
   * "2025" -> "2025-12"
   * "Present" / "Current" -> "Present"
 
-4. TECHNOLOGY TAXONOMY & ORM SEPARATION:
+5. TECHNOLOGY TAXONOMY & ORM SEPARATION:
 - Extract EVERY technology mentioned across Skills, Experience, Projects, and Activities.
 - DO NOT summarize or omit technologies. Use exact official casing (e.g. "TanStack Query", "TypeORM", "OpenTelemetry", "BullMQ", "AsyncLocalStorage", "EventEmitter2", "React 19", "FastAPI", "n8n", "Sentry", "Jaeger", "Prometheus", "Grafana", "Redis").
 - RULES FOR CATEGORIES:
@@ -492,7 +665,7 @@ Strict Extraction Instructions:
   * "other": Cloud & observability (AWS, GCP, Firebase, OpenTelemetry, Grafana, Prometheus, Jaeger, WebSockets, REST APIs, Microservices).
   * "patterns": Architecture & design patterns (AsyncLocalStorage, Event Driven Architecture, Audit Logging, RBAC, Branch Based Access Control, Idempotent Delivery).
 
-5. EDUCATION (DEGREE & FIELD SEPARATION):
+6. EDUCATION (DEGREE & FIELD SEPARATION):
 - Strictly separate the degree from the field of study.
 - For "Bachelor of Technology in Electronics and Computer Engineering":
   * degree: "Bachelor of Technology"
@@ -501,15 +674,15 @@ Strict Extraction Instructions:
   * endYear: 2026
   * graduationDate: "2026"
 
-6. ACHIEVEMENTS VS CERTIFICATIONS:
+7. ACHIEVEMENTS VS CERTIFICATIONS:
 - "certifications": ONLY official professional certifications (e.g. AWS Certified Solutions Architect). If none exist, return [].
 - "achievements": Hackathon placements, competitive programming ranks, coding milestones (e.g. "Amazon ML Challenge: Ranked 62nd of 2,500+ teams", "Codeforces Specialist (max rating 1448)", "500+ DSA problems solved across Codeforces and LeetCode").
 
-7. PROJECT EXTRACTION & ZERO-HALLUCINATION URLS:
+8. PROJECT EXTRACTION & ZERO-HALLUCINATION URLS:
 - For every project in "projects", extract name, description, techStack.
 - Set "url": null unless an explicit, complete repository URL is written in the resume text. NEVER hallucinate repository URLs.
 
-8. PROFESSIONAL SUMMARY:
+9. PROFESSIONAL SUMMARY:
 - In "summary", generate a concise 2-3 sentence summary reflecting the candidate's core backend strengths, authorization/audit systems, startup leadership, and production stack.
 
 Output pure JSON conforming to this schema:
@@ -538,7 +711,12 @@ Output pure JSON conforming to this schema:
       "experienceType": "FULL_TIME | INTERNSHIP | FOUNDER | FREELANCE | CONTRACT",
       "isFounder": false,
       "founderType": "FOUNDER | CO_FOUNDER | FOUNDING_ENGINEER | null",
-      "highlights": ["string"]
+      "sourceBullets": ["Exact verbatim bullet point from resume under this role"],
+      "highlights": ["Exact verbatim bullet point from resume under this role"],
+      "whatWasBuilt": ["Specific feature or system built in THIS role, or empty array [] if none"],
+      "scaleAndOwnership": ["Specific ownership scope in THIS role, or empty array [] if none"],
+      "measurableImpact": ["Quantitative metrics explicitly stated in THIS role, or empty array [] if none"],
+      "technologies": ["Technology explicitly mentioned in THIS role's text"]
     }
   ],
   "education": [

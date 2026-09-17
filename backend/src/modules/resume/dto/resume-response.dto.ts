@@ -6,6 +6,7 @@ export class ResumeResponseDto {
   originalFileName: string;
   fileName: string;
   label: string | null;
+  category: string;
   status: ResumeFileStatus;
   rawText: string | null;
   parseError: string | null;

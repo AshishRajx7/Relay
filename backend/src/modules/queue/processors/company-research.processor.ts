@@ -71,9 +71,29 @@ export class CompanyResearchProcessor extends WorkerHost {
 
     // Phase 2 & 3: Domain-based company profile intelligence
     if (job.data.domain) {
-      const { domain, companyName, campaignId } = job.data;
+      const { domain, companyName, campaignId, email } = job.data;
       this.logger.log(`[CompanyResearchProcessor] Executing intelligence for domain: ${domain}`);
-      
+
+      // Handle personal/freemail webmail domains without crawling or throwing errors
+      if (this.companyProfileService.isFreeMailDomain(domain)) {
+        this.logger.log(`[CompanyResearchProcessor] Domain "${domain}" is a personal webmail provider. Marking prospect for manual review.`);
+        if (campaignId && email) {
+          await this.prospectRepository.update(
+            { campaignId, email },
+            { researchStatus: ProspectResearchStatus.MANUAL_REVIEW },
+          );
+        } else if (domain) {
+          await this.prospectRepository.update(
+            { domain, researchStatus: ProspectResearchStatus.PENDING },
+            { researchStatus: ProspectResearchStatus.MANUAL_REVIEW },
+          );
+        }
+        if (campaignId) {
+          await this.checkAndTriggerDraftGeneration(campaignId);
+        }
+        return { domain, isFreeMail: true };
+      }
+
       let profile;
       try {
         profile = await this.companyProfileService.researchAndSaveCompany(domain, companyName);

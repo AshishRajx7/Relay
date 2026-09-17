@@ -30,7 +30,12 @@ export interface ExperienceJson {
   experienceType?: ExperienceType;
   isFounder?: boolean;
   founderType?: 'FOUNDER' | 'CO_FOUNDER' | 'FOUNDING_ENGINEER' | null;
+  sourceBullets?: string[];
   highlights: string[];
+  whatWasBuilt?: string[];
+  scaleAndOwnership?: string[];
+  measurableImpact?: string[];
+  technologies?: string[];
 }
 
 export interface EducationJson {

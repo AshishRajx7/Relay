@@ -16,6 +16,13 @@ export enum ResumeFileStatus {
   FAILED = 'FAILED',
 }
 
+export enum ResumeCategory {
+  BACKEND = 'BACKEND',
+  AI_ML = 'AI_ML',
+  FULL_STACK = 'FULL_STACK',
+  CUSTOM = 'CUSTOM',
+}
+
 @Entity('resume_file')
 export class ResumeFile {
   @PrimaryGeneratedColumn('uuid')
@@ -47,6 +54,14 @@ export class ResumeFile {
 
   @Column({ length: 100, nullable: true })
   label: string | null;
+
+  @Column({
+    name: 'category',
+    type: 'varchar',
+    length: 50,
+    default: ResumeCategory.BACKEND,
+  })
+  category: ResumeCategory;
 
   @Column({ name: 'parse_error', type: 'text', nullable: true })
   parseError: string | null;

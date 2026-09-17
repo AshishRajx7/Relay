@@ -1,6 +1,7 @@
 import {
   Injectable,
   NotFoundException,
+  BadRequestException,
   ConflictException,
   Logger,
 } from '@nestjs/common';
@@ -9,13 +10,13 @@ import { Repository } from 'typeorm';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import * as crypto from 'crypto';
-import { ResumeFile, ResumeFileStatus } from './entities/resume-file.entity';
+import { ResumeFile, ResumeFileStatus, ResumeCategory } from './entities/resume-file.entity';
 import { CandidateProfile } from './entities/candidate-profile.entity';
 import { StorageService } from '../storage/storage.service';
 import { QUEUE_RESUME_PARSING, JOB_PARSE_RESUME } from '../../common/constants/app.constants';
 import { UpdateResumeDto } from './dto/update-resume.dto';
 import { ResumeResponseDto } from './dto/resume-response.dto';
-import { ResumeListResponseDto } from './dto/resume-list-response.dto';
+import { ResumeListResponseDto, ResumeProcessingStatus } from './dto/resume-list-response.dto';
 import { CandidateProfileDto } from './dto/candidate-profile.dto';
 
 @Injectable()
@@ -36,7 +37,7 @@ export class ResumeService {
     return crypto.createHash('sha256').update(buffer).digest('hex');
   }
 
-  async upload(file: Express.Multer.File, label?: string): Promise<ResumeResponseDto> {
+  async upload(file: Express.Multer.File, label?: string, category?: string): Promise<ResumeResponseDto> {
     const fileHash = this.computeHash(file.buffer);
 
     // Check for duplicate resume
@@ -49,6 +50,20 @@ export class ResumeService {
       );
     }
 
+    let parsedCategory = ResumeCategory.BACKEND;
+    if (category) {
+      const upper = category.toUpperCase().replace(/[^A-Z_]/g, '_');
+      if (upper === 'AI_ML' || upper === 'AIML' || upper === 'ML' || upper === 'AI') {
+        parsedCategory = ResumeCategory.AI_ML;
+      } else if (upper === 'FULL_STACK' || upper === 'FULLSTACK') {
+        parsedCategory = ResumeCategory.FULL_STACK;
+      } else if (upper === 'CUSTOM') {
+        parsedCategory = ResumeCategory.CUSTOM;
+      } else if (upper === 'BACKEND') {
+        parsedCategory = ResumeCategory.BACKEND;
+      }
+    }
+
     // Create initial entity to generate UUID
     const resume = this.resumeFileRepository.create({
       originalFileName: file.originalname,
@@ -56,6 +71,7 @@ export class ResumeService {
       storagePath: 'pending',
       fileHash,
       label: label?.trim() || null,
+      category: parsedCategory,
       status: ResumeFileStatus.UPLOADED,
     });
 
@@ -96,6 +112,15 @@ export class ResumeService {
 
     return resumes.map((resume) => {
       let slimProfile = null;
+      let processingStatus: ResumeProcessingStatus = 'PROCESSING';
+      if (resume.status === ResumeFileStatus.PARSED && resume.profile) {
+        processingStatus = 'READY';
+      } else if (resume.status === ResumeFileStatus.FAILED) {
+        processingStatus = 'FAILED';
+      } else {
+        processingStatus = 'PROCESSING';
+      }
+
       if (resume.profile) {
         const skills = resume.profile.skills || { languages: [], frameworks: [], databases: [], tools: [], other: [] };
         const combinedSkills = [
@@ -106,6 +131,7 @@ export class ResumeService {
           ...(skills.other || []),
         ];
         slimProfile = {
+          id: resume.profile.id,
           name: resume.profile.name,
           title: resume.profile.title,
           topSkills: combinedSkills.slice(0, 6),
@@ -114,9 +140,13 @@ export class ResumeService {
 
       return {
         id: resume.id,
+        resumeFileId: resume.id,
+        candidateProfileId: resume.profile?.id ?? null,
         originalFileName: resume.originalFileName,
         label: resume.label,
+        category: resume.category || ResumeCategory.BACKEND,
         status: resume.status,
+        processingStatus,
         profile: slimProfile,
         uploadedAt: resume.uploadedAt,
       };
@@ -124,6 +154,9 @@ export class ResumeService {
   }
 
   async findOne(id: string): Promise<ResumeResponseDto> {
+    if (!id || typeof id !== 'string' || !id.trim()) {
+      throw new BadRequestException('Invalid resume ID provided');
+    }
     const resume = await this.resumeFileRepository.findOne({
       where: { id },
     });
@@ -134,6 +167,9 @@ export class ResumeService {
   }
 
   async updateLabel(id: string, updateDto: UpdateResumeDto): Promise<ResumeResponseDto> {
+    if (!id || typeof id !== 'string' || !id.trim()) {
+      throw new BadRequestException('Invalid resume ID provided');
+    }
     const resume = await this.resumeFileRepository.findOne({ where: { id } });
     if (!resume) {
       throw new NotFoundException(`Resume with ID ${id} not found`);
@@ -148,6 +184,9 @@ export class ResumeService {
   }
 
   async reparse(id: string): Promise<{ id: string; status: string; message: string }> {
+    if (!id || typeof id !== 'string' || !id.trim()) {
+      throw new BadRequestException('Invalid resume ID provided');
+    }
     const resume = await this.resumeFileRepository.findOne({ where: { id } });
     if (!resume) {
       throw new NotFoundException(`Resume with ID ${id} not found`);
@@ -179,6 +218,9 @@ export class ResumeService {
   }
 
   async delete(id: string): Promise<void> {
+    if (!id || typeof id !== 'string' || !id.trim()) {
+      throw new BadRequestException('Invalid resume ID provided');
+    }
     const resume = await this.resumeFileRepository.findOne({ where: { id } });
     if (!resume) {
       throw new NotFoundException(`Resume with ID ${id} not found`);
@@ -222,6 +264,7 @@ export class ResumeService {
       originalFileName: resume.originalFileName,
       fileName: resume.fileName,
       label: resume.label,
+      category: resume.category || ResumeCategory.BACKEND,
       status: resume.status,
       rawText: resume.rawText,
       parseError: resume.parseError,

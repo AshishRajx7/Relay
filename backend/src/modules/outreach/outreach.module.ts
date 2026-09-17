@@ -8,6 +8,7 @@ import { EmailDraftVariant } from './entities/email-draft-variant.entity';
 import { Prospect } from '../prospects/entities/prospect.entity';
 import { CompanyProfile } from '../company-research/entities/company-profile.entity';
 import { CandidateProfile } from '../resume/entities/candidate-profile.entity';
+import { ResumeFile } from '../resume/entities/resume-file.entity';
 import { Campaign } from '../campaigns/entities/campaign.entity';
 import { ContactIntelligenceService } from './services/contact-intelligence.service';
 import { CandidateMatchingService } from './services/candidate-matching.service';
@@ -35,6 +36,7 @@ import { QUEUE_DRAFT_GENERATION, QUEUE_GMAIL_DRAFT } from '../../common/constant
       Prospect,
       CompanyProfile,
       CandidateProfile,
+      ResumeFile,
       Campaign,
     ]),
     BullModule.registerQueue(

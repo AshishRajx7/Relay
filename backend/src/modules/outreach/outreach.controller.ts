@@ -148,6 +148,26 @@ export class OutreachController {
     return this.outreachService.regenerateDraft(id);
   }
 
+  @Post('drafts/:id/override-resume')
+  @ApiOperation({ summary: 'Override selected resume profile for a draft and regenerate outreach' })
+  @ApiParam({ name: 'id', description: 'Draft UUID' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        resumeId: { type: 'string', description: 'Resume File or Profile UUID' },
+      },
+      required: ['resumeId'],
+    },
+  })
+  @ApiResponse({ status: 200, description: 'Draft regenerated with overridden resume' })
+  async overrideResume(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body('resumeId') resumeId: string,
+  ): Promise<EmailDraft> {
+    return this.outreachService.overrideResumeAndRegenerate(id, resumeId);
+  }
+
   @Post('drafts/:id/create-gmail-draft')
   @ApiOperation({ summary: 'Create a draft in user\'s Gmail account (MANDATORY APPROVAL CHECK)' })
   @ApiParam({ name: 'id', description: 'Draft UUID' })

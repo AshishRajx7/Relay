@@ -25,6 +25,11 @@ import {
 } from '../../../common/constants/app.constants';
 
 export interface IngestionResult {
+  total: number;
+  queued: number;
+  duplicateInFile: number;
+  duplicateInQueue: number;
+  duplicateInDatabase: number;
   campaignId: string;
   totalParsed: number;
   totalCreated: number;
@@ -131,7 +136,7 @@ export class CampaignIngestionService {
     if (items.length === 0) {
       const allMatches = content.match(this.emailRegex) || [];
       for (const email of allMatches) {
-        items.push({ email: email.toLowerCase(), companyName: null });
+        items.push({ email: email.trim().toLowerCase(), companyName: null });
       }
     }
 
@@ -139,7 +144,8 @@ export class CampaignIngestionService {
   }
 
   /**
-   * Extracts text from PDF and scrapes all valid email tokens via regular expression.
+   * Extracts text from PDF and scrapes all email tokens without set collapsing,
+   * preserving duplicate occurrences for accurate duplicateInFile tracking.
    */
   private async parsePdfContent(buffer: Buffer): Promise<Array<{ email: string; companyName?: string | null }>> {
     let text = '';
@@ -152,16 +158,19 @@ export class CampaignIngestionService {
     }
 
     const matches = text.match(this.emailRegex) || [];
-    const uniqueEmails = Array.from(new Set(matches.map((e) => e.toLowerCase())));
 
-    return uniqueEmails.map((email) => ({
-      email,
+    return matches.map((email) => ({
+      email: email.trim().toLowerCase(),
       companyName: null,
     }));
   }
 
   /**
-   * Deduplicates, normalizes domains, filters bots, creates prospects, and enqueues research jobs.
+   * Deduplicates BEFORE queueing and database insert across:
+   * 1. Current Batch (duplicateInFile)
+   * 2. Existing Database Records (duplicateInDatabase)
+   * 3. Existing BullMQ Queue (duplicateInQueue)
+   * Uses deterministic BullMQ job IDs `${campaignId}:${normalizedEmail}` to guarantee uniqueness.
    */
   private async processParsedItems(
     campaign: Campaign,
@@ -172,37 +181,65 @@ export class CampaignIngestionService {
       where: { campaignId: campaign.id },
       select: ['email'],
     });
-    const existingEmailSet = new Set(existingProspects.map((p) => p.email.toLowerCase()));
+    const dbEmailSet = new Set(existingProspects.map((p) => p.email.trim().toLowerCase()));
 
-    const uniqueBatch = new Map<string, { email: string; companyName?: string | null }>();
-    let totalDuplicates = 0;
-
-    for (const item of items) {
-      const email = item.email.toLowerCase().trim();
-      if (existingEmailSet.has(email) || uniqueBatch.has(email)) {
-        totalDuplicates++;
-      } else {
-        uniqueBatch.set(email, item);
-      }
-    }
+    let duplicateInFile = 0;
+    let duplicateInDatabase = 0;
+    let duplicateInQueue = 0;
+    let queued = 0;
 
     let freeMailCount = 0;
     let unsupportedCount = 0;
     let corporateCount = 0;
     let cachedCount = 0;
-    let queuedForResearch = 0;
 
-    const domainsToResearch = new Set<string>();
+    const seenInBatch = new Set<string>();
 
-    for (const [, item] of uniqueBatch.entries()) {
-      const rawDomain = item.email.split('@')[1]?.toLowerCase() || '';
+    for (const item of items) {
+      const normalizedEmail = item.email.trim().toLowerCase();
+
+      // 1. Current Batch Check: Deduplicate within the uploaded file itself
+      if (seenInBatch.has(normalizedEmail)) {
+        duplicateInFile++;
+        continue;
+      }
+      seenInBatch.add(normalizedEmail);
+
+      // 2. Existing Database Records Check: Skip if prospect already exists in this campaign
+      if (dbEmailSet.has(normalizedEmail)) {
+        duplicateInDatabase++;
+        continue;
+      }
+
+      // 3. Existing Queue Check: Skip if a queued job already exists for campaignId + email
+      // Note: BullMQ explicitly prohibits ':' in custom job IDs because it uses ':' as Redis key delimiter.
+      // We use `${campaign.id}__${normalizedEmail}` as the deterministic unique job ID.
+      const jobId = `${campaign.id}__${normalizedEmail}`;
+      const existingJob = await this.researchQueue.getJob(jobId);
+      if (existingJob) {
+        const state = await existingJob.getState();
+        if (['waiting', 'active', 'delayed', 'prioritized', 'completed'].includes(state)) {
+          duplicateInQueue++;
+          continue;
+        } else if (state === 'failed') {
+          // Remove old failed job so clean retry can occur
+          try {
+            await existingJob.remove();
+          } catch {
+            // Ignore if already deleted
+          }
+        }
+      }
+
+      // Admitted: Classify domain and contact intelligence
+      const rawDomain = normalizedEmail.split('@')[1] || '';
       const normalizedDomain = this.domainService.normalizeCompanyDomain(rawDomain);
       const isFreeMail = this.companyProfileService.isFreeMailDomain(normalizedDomain);
-      const contactType = this.contactIntelligenceService.classifyContact(item.email);
+      const contactType = this.contactIntelligenceService.classifyContact(normalizedEmail);
 
       const prospect = this.prospectRepository.create({
         campaignId: campaign.id,
-        email: item.email,
+        email: normalizedEmail,
         domain: normalizedDomain,
         companyName: item.companyName || (isFreeMail ? null : normalizedDomain.split('.')[0]),
         sourceType,
@@ -210,7 +247,7 @@ export class CampaignIngestionService {
         draftStatus: ProspectDraftStatus.PENDING,
       });
 
-      // Phase 3.5 Contact Filtering: Skip bot/system addresses
+      // Contact filtering: Skip bot/system addresses
       if (contactType === ContactType.UNSUPPORTED_CONTACT) {
         unsupportedCount++;
         prospect.researchStatus = ProspectResearchStatus.UNSUPPORTED_CONTACT;
@@ -231,24 +268,24 @@ export class CampaignIngestionService {
           prospect.researchStatus = ProspectResearchStatus.RESEARCHED;
         } else {
           prospect.researchStatus = ProspectResearchStatus.PENDING;
-          domainsToResearch.add(normalizedDomain);
         }
       }
 
+      // Save prospect to DB and register in dbEmailSet
       await this.prospectRepository.save(prospect);
-    }
+      dbEmailSet.add(normalizedEmail);
 
-    // Queue BullMQ research jobs for unique unresearched domains
-    for (const domain of domainsToResearch) {
-      queuedForResearch++;
+      // Enqueue research job to BullMQ with deterministic jobId (${campaignId}:${normalizedEmail})
       await this.researchQueue.add(
         JOB_RESEARCH_COMPANY,
         {
-          domain,
+          domain: normalizedDomain,
+          companyName: item.companyName || (isFreeMail ? null : normalizedDomain.split('.')[0]),
           campaignId: campaign.id,
+          email: normalizedEmail,
         },
         {
-          jobId: `company-research-${domain}`,
+          jobId,
           attempts: 3,
           backoff: {
             type: 'exponential',
@@ -257,10 +294,12 @@ export class CampaignIngestionService {
           removeOnComplete: true,
         },
       );
+
+      queued++;
     }
 
     // Update campaign progress metrics
-    campaign.totalProspects += uniqueBatch.size;
+    campaign.totalProspects += queued;
     campaign.completedProspects += cachedCount;
     campaign.manualReviewCount += freeMailCount;
     if (campaign.status === CampaignStatus.CREATED || campaign.status === CampaignStatus.DRAFT) {
@@ -269,26 +308,32 @@ export class CampaignIngestionService {
     await this.campaignRepository.save(campaign);
 
     this.logger.log(
-      `Ingested ${uniqueBatch.size} prospects for campaign "${campaign.name}" | ` +
-      `Cached: ${cachedCount} | Queued Research: ${queuedForResearch} | FreeMail: ${freeMailCount} | ` +
-      `Unsupported: ${unsupportedCount} | Duplicates: ${totalDuplicates}`
+      `Ingested prospects for campaign "${campaign.name}" | ` +
+      `Total: ${items.length} | Queued: ${queued} | DuplicatesInFile: ${duplicateInFile} | ` +
+      `DuplicatesInQueue: ${duplicateInQueue} | DuplicatesInDatabase: ${duplicateInDatabase} | ` +
+      `Cached: ${cachedCount} | FreeMail: ${freeMailCount} | Unsupported: ${unsupportedCount}`
     );
 
-    // If no new domains needed research (all cached), immediately auto-chain to draft generation
-    if (queuedForResearch === 0 && uniqueBatch.size > 0) {
+    // If all newly queued items were already cached or none needed live research, auto-chain to draft generation
+    if (queued > 0 && cachedCount === queued) {
       await this.checkAndTriggerDraftGeneration(campaign.id);
     }
 
     return {
+      total: items.length,
+      queued,
+      duplicateInFile,
+      duplicateInQueue,
+      duplicateInDatabase,
       campaignId: campaign.id,
       totalParsed: items.length,
-      totalCreated: uniqueBatch.size,
-      totalDuplicates,
+      totalCreated: queued,
+      totalDuplicates: duplicateInFile + duplicateInQueue + duplicateInDatabase,
       freeMailCount,
       unsupportedCount,
       corporateCount,
       cachedCount,
-      queuedForResearch,
+      queuedForResearch: queued,
     };
   }
 

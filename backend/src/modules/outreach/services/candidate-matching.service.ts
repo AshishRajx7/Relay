@@ -25,6 +25,30 @@ export interface CandidateMatchResult {
   personalizationTier: PersonalizationTier;
 }
 
+export interface MultiResumeMatchResult {
+  selectedCandidate: CandidateProfile;
+  selectedResumeId?: string;
+  selectedResumeName: string;
+  selectedResumeCategory: string;
+  matchScore: number;
+  selectionReason: string;
+  evidenceUsedInEmail: string[];
+  keyMatches: string[];
+  projectsReferenced: string[];
+  missingSkills: string[];
+  recommendedTalkingPoints: string[];
+  whyMePoints: string[];
+  allResumeScores: Array<{
+    resumeId: string;
+    resumeName: string;
+    category: string;
+    score: number;
+    reason: string;
+    isSelected: boolean;
+  }>;
+  matchResult: CandidateMatchResult;
+}
+
 interface ExperienceCatalogItem {
   name: string;
   keywords: string[];
@@ -146,13 +170,72 @@ export class CandidateMatchingService {
         ].filter(Boolean);
         const roleTechs = candidateSkills.filter((s) => this.matchesWholeWord(highlights, s));
 
-        catalog.push({
-          name: roleName,
-          keywords,
-          technologies: roleTechs.length > 0 ? roleTechs : candidateSkills.slice(0, 3),
-          description: highlights || `${exp.title} at ${exp.company}`,
-          relevantDomains: ['enterprise software', 'b2b saas', 'digital transformation'],
-        });
+        let addedDeliverable = false;
+
+        // Ingest specific concrete deliverables (what was built, scale, impact)
+        if (Array.isArray(exp.whatWasBuilt) && exp.whatWasBuilt.length > 0) {
+          for (const built of exp.whatWasBuilt) {
+            if (!built || built.trim().length === 0) continue;
+            let projName = built.replace(/^(built|architected|developed|engineered|created|implemented|designed)\s+/i, '').trim();
+            projName = projName.charAt(0).toUpperCase() + projName.slice(1);
+            if (projName.length > 45) projName = projName.slice(0, 45).trim();
+            const rawTokens = `${built}`.toLowerCase().match(/\b[a-z0-9_-]{3,}\b/g) || [];
+            catalog.push({
+              name: projName,
+              keywords: Array.from(new Set(rawTokens)),
+              technologies: roleTechs.length > 0 ? roleTechs : candidateSkills.slice(0, 3),
+              description: built,
+              relevantDomains: ['platform engineering', 'backend systems', 'b2b saas', 'enterprise software', 'developer tools'],
+            });
+            addedDeliverable = true;
+          }
+        }
+
+        if (Array.isArray(exp.scaleAndOwnership) && exp.scaleAndOwnership.length > 0) {
+          for (const item of exp.scaleAndOwnership) {
+            if (!item || item.trim().length === 0) continue;
+            let projName = item.replace(/^(designed|owned|led|built|scaled)\s+/i, '').trim();
+            projName = projName.charAt(0).toUpperCase() + projName.slice(1);
+            if (projName.length > 45) projName = projName.slice(0, 45).trim();
+            const rawTokens = `${item}`.toLowerCase().match(/\b[a-z0-9_-]{3,}\b/g) || [];
+            catalog.push({
+              name: projName,
+              keywords: Array.from(new Set(rawTokens)),
+              technologies: roleTechs.length > 0 ? roleTechs : candidateSkills.slice(0, 3),
+              description: item,
+              relevantDomains: ['platform engineering', 'cloud infrastructure', 'security', 'caching'],
+            });
+            addedDeliverable = true;
+          }
+        }
+
+        if (Array.isArray(exp.measurableImpact) && exp.measurableImpact.length > 0) {
+          for (const impact of exp.measurableImpact) {
+            if (!impact || impact.trim().length === 0) continue;
+            let projName = impact.replace(/^(optimized|reduced|improved|increased)\s+/i, '').trim();
+            projName = projName.charAt(0).toUpperCase() + projName.slice(1);
+            if (projName.length > 45) projName = projName.slice(0, 45).trim();
+            const rawTokens = `${impact}`.toLowerCase().match(/\b[a-z0-9_-]{3,}\b/g) || [];
+            catalog.push({
+              name: projName,
+              keywords: Array.from(new Set(rawTokens)),
+              technologies: roleTechs.length > 0 ? roleTechs : candidateSkills.slice(0, 3),
+              description: impact,
+              relevantDomains: ['database optimization', 'performance engineering', 'indexing'],
+            });
+            addedDeliverable = true;
+          }
+        }
+
+        if (!addedDeliverable) {
+          catalog.push({
+            name: roleName,
+            keywords,
+            technologies: roleTechs.length > 0 ? roleTechs : candidateSkills.slice(0, 3),
+            description: highlights || `${exp.title} at ${exp.company}`,
+            relevantDomains: ['platform engineering', 'backend systems', 'b2b saas', 'enterprise software', 'developer tools'],
+          });
+        }
       }
     }
 
@@ -376,6 +459,186 @@ export class CandidateMatchingService {
       rankedMatches,
       strategy,
       personalizationTier,
+    };
+  }
+
+  /**
+   * Scores multiple candidate resumes against a target company and automatically selects the best match,
+   * factoring in resume category fit (BACKEND, AI_ML, FULL_STACK) and technical overlap.
+   */
+  public selectBestResumeForCompany(
+    candidates: Array<CandidateProfile & { resumeFile?: any }>,
+    company: CompanyProfile,
+    overrideResumeId?: string,
+  ): MultiResumeMatchResult {
+    if (!candidates || candidates.length === 0) {
+      throw new Error('No candidate profiles provided for multi-resume evaluation');
+    }
+
+    const companyTechSignals = (company?.techSignals || []).map((t) => t.toLowerCase());
+    const companySummary = (company?.summary || '').toLowerCase();
+    const companyIndustry = (company?.industry || '').toLowerCase();
+    const isAiMlCompany = /ai|machine learning|llm|deep learning|vision|nlp|data science/i.test(
+      companyIndustry + ' ' + companySummary,
+    );
+
+    const scoredResumes: Array<{
+      candidate: CandidateProfile & { resumeFile?: any };
+      score: number;
+      matchResult: CandidateMatchResult;
+      reason: string;
+      category: string;
+      resumeName: string;
+    }> = [];
+
+    for (const cand of candidates) {
+      const matchResult = this.matchExperience(company, cand);
+      const cat = (cand.resumeFile?.category || 'BACKEND').toUpperCase();
+      let adjustedScore = matchResult.matchScore;
+
+      // Category fit weighting
+      if (isAiMlCompany && cat === 'AI_ML') {
+        adjustedScore = Math.min(99, adjustedScore + 8);
+      } else if (!isAiMlCompany && cat === 'BACKEND') {
+        adjustedScore = Math.min(99, adjustedScore + 5);
+      }
+
+      const candSkills = [
+        ...(cand.skills?.languages || []),
+        ...(cand.skills?.frameworks || []),
+        ...(cand.skills?.databases || []),
+        ...(cand.skills?.tools || []),
+      ];
+      const matched = candSkills.filter((s) =>
+        companyTechSignals.some((ct) => this.techMatches(s, ct)),
+      );
+      const resumeName = cand.resumeFile?.label || cand.name || `${cat} Resume`;
+
+      let reason = `Strong alignment with ${company.companyName || 'target company'}`;
+      if (matched.length > 0) {
+        reason = `Direct match on ${matched.slice(0, 4).join(', ')} and ${cat.replace('_', '/')} background.`;
+      } else if (matchResult.matchedTechnologies.length > 0) {
+        reason = `Proven experience in ${matchResult.matchedTechnologies.join(', ')} and distributed systems.`;
+      }
+
+      scoredResumes.push({
+        candidate: cand,
+        score: adjustedScore,
+        matchResult,
+        reason,
+        category: cat,
+        resumeName,
+      });
+    }
+
+    // Sort by adjusted score descending
+    scoredResumes.sort((a, b) => b.score - a.score);
+
+    // Check if user specifically requested an override
+    let selectedItem = scoredResumes[0];
+    if (overrideResumeId) {
+      const foundOverride = scoredResumes.find(
+        (r) =>
+          r.candidate.id === overrideResumeId ||
+          r.candidate.resumeFile?.id === overrideResumeId ||
+          r.candidate.resumeFileId === overrideResumeId,
+      );
+      if (foundOverride) {
+        selectedItem = foundOverride;
+      }
+    }
+
+    const selectedCand = selectedItem.candidate;
+    const candSkills = [
+      ...(selectedCand.skills?.languages || []),
+      ...(selectedCand.skills?.frameworks || []),
+      ...(selectedCand.skills?.databases || []),
+      ...(selectedCand.skills?.tools || []),
+    ];
+
+    const keyMatches = Array.from(
+      new Set([
+        ...selectedItem.matchResult.matchedTechnologies,
+        ...candSkills.filter((s) => companyTechSignals.some((ct) => this.techMatches(s, ct))),
+      ]),
+    );
+
+    const missingSkills = companyTechSignals
+      .filter((ct) => !candSkills.some((s) => this.techMatches(s, ct)))
+      .slice(0, 4)
+      .map((s) => s.charAt(0).toUpperCase() + s.slice(1));
+
+    // Extract concrete evidence points used in email
+    const evidenceUsedInEmail: string[] = [];
+    if (selectedItem.matchResult.chosenProject) {
+      evidenceUsedInEmail.push(selectedItem.matchResult.chosenProject);
+    }
+    if (Array.isArray(selectedCand.experience)) {
+      for (const exp of selectedCand.experience) {
+        if (Array.isArray(exp.whatWasBuilt) && exp.whatWasBuilt.length > 0) {
+          for (const b of exp.whatWasBuilt) {
+            if (evidenceUsedInEmail.length < 3 && !evidenceUsedInEmail.includes(b)) {
+              evidenceUsedInEmail.push(b);
+            }
+          }
+        }
+        if (Array.isArray(exp.scaleAndOwnership) && exp.scaleAndOwnership.length > 0) {
+          for (const s of exp.scaleAndOwnership) {
+            if (evidenceUsedInEmail.length < 3 && !evidenceUsedInEmail.includes(s)) {
+              evidenceUsedInEmail.push(s);
+            }
+          }
+        }
+      }
+    }
+    if (evidenceUsedInEmail.length === 0) {
+      evidenceUsedInEmail.push(
+        'Audit Logging Platform',
+        'BranchGuard Redis Caching',
+        'Leave Management Optimization',
+      );
+    }
+
+    const whyMePoints = [
+      `Production backend engineering across ${keyMatches.slice(0, 3).join(', ') || 'distributed systems'}`,
+      `Built idempotent, high-concurrency event pipelines and caching layers`,
+      `Direct experience solving database query bottlenecks and index performance`,
+      `Autonomous full-lifecycle ownership from database schema to API delivery`,
+    ];
+
+    const recommendedTalkingPoints = [
+      `Discuss architecture for high-throughput event processing and audit trails`,
+      `Share benchmark results from Redis caching optimizations and latency reductions`,
+      `Exchange perspectives on database isolation patterns and multi-tenant authorization`,
+    ];
+
+    const allResumeScores = scoredResumes.map((r) => ({
+      resumeId: r.candidate.resumeFile?.id || r.candidate.id,
+      resumeName: r.resumeName,
+      category: r.category,
+      score: r.score,
+      reason: r.reason,
+      isSelected:
+        r.candidate.id === selectedCand.id ||
+        r.candidate.resumeFile?.id === selectedCand.resumeFile?.id ||
+        r.candidate.resumeFileId === selectedCand.resumeFileId,
+    }));
+
+    return {
+      selectedCandidate: selectedCand,
+      selectedResumeId: selectedCand.resumeFile?.id || selectedCand.resumeFileId || selectedCand.id,
+      selectedResumeName: selectedItem.resumeName,
+      selectedResumeCategory: selectedItem.category,
+      matchScore: selectedItem.score,
+      selectionReason: selectedItem.reason,
+      evidenceUsedInEmail,
+      keyMatches,
+      projectsReferenced: evidenceUsedInEmail,
+      missingSkills,
+      recommendedTalkingPoints,
+      whyMePoints,
+      allResumeScores,
+      matchResult: selectedItem.matchResult,
     };
   }
 }

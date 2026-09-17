@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, Logger } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, MoreThan, In } from 'typeorm';
 import { CompanyResearch } from './entities/company-research.entity';
@@ -72,6 +72,9 @@ export class CompanyResearchService {
    * Finds a research record by its own UUID.
    */
   async findById(id: string): Promise<CompanyResearch | null> {
+    if (!id || typeof id !== 'string' || !id.trim()) {
+      return null;
+    }
     return await this.researchRepository.findOne({ where: { id } });
   }
 
@@ -79,6 +82,9 @@ export class CompanyResearchService {
    * Creates or returns an active pending research record for a company (Idempotency safe).
    */
   async createPendingResearch(companyId: string, forceNew: boolean = false): Promise<CompanyResearch> {
+    if (!companyId || typeof companyId !== 'string' || !companyId.trim()) {
+      throw new BadRequestException('Invalid company ID provided');
+    }
     const company = await this.companyRepository.findOne({ where: { id: companyId } });
     if (!company) {
       throw new NotFoundException(`Company with ID "${companyId}" not found.`);
@@ -122,6 +128,9 @@ export class CompanyResearchService {
    * Marks research as currently processing by worker.
    */
   async markProcessing(id: string): Promise<CompanyResearch> {
+    if (!id || typeof id !== 'string' || !id.trim()) {
+      throw new BadRequestException('Invalid research ID provided');
+    }
     const research = await this.researchRepository.findOne({ where: { id } });
     if (!research) {
       throw new NotFoundException(`Research record with ID "${id}" not found.`);
@@ -138,6 +147,9 @@ export class CompanyResearchService {
     id: string,
     payload: Partial<CompanyResearch>,
   ): Promise<CompanyResearch> {
+    if (!id || typeof id !== 'string' || !id.trim()) {
+      throw new BadRequestException('Invalid research ID provided');
+    }
     const research = await this.researchRepository.findOne({ where: { id } });
     if (!research) {
       throw new NotFoundException(`Research record with ID "${id}" not found.`);
@@ -184,6 +196,9 @@ export class CompanyResearchService {
     score: number,
     payload?: Partial<CompanyResearch>,
   ): Promise<CompanyResearch> {
+    if (!id || typeof id !== 'string' || !id.trim()) {
+      throw new BadRequestException('Invalid research ID provided');
+    }
     const research = await this.researchRepository.findOne({ where: { id } });
     if (!research) {
       throw new NotFoundException(`Research record with ID "${id}" not found.`);
@@ -221,6 +236,9 @@ export class CompanyResearchService {
    * Marks research as failed due to crawling or unhandled extraction errors.
    */
   async markFailed(id: string, error: string): Promise<CompanyResearch> {
+    if (!id || typeof id !== 'string' || !id.trim()) {
+      throw new BadRequestException('Invalid research ID provided');
+    }
     const research = await this.researchRepository.findOne({ where: { id } });
     if (!research) {
       throw new NotFoundException(`Research record with ID "${id}" not found.`);

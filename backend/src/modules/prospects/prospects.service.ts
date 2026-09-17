@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Prospect, ProspectResearchStatus } from './entities/prospect.entity';
@@ -24,6 +24,9 @@ export class ProspectsService {
   }
 
   async findOne(id: string): Promise<Prospect> {
+    if (!id || typeof id !== 'string' || !id.trim()) {
+      throw new BadRequestException('Invalid prospect ID provided');
+    }
     const prospect = await this.prospectRepository.findOne({
       where: { id },
       relations: ['companyProfile', 'campaign'],

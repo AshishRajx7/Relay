@@ -179,7 +179,7 @@ async function runPhase4Phase5Tests() {
     personalizationTier: 'LOW_MATCH',
   };
 
-  const genericBody = 'Hi Team,\n\nI am a backend developer with experience building distributed systems using NestJS, PostgreSQL and Redis and would love to explore opportunities within your engineering organization. In my previous work on BullMQ Notification System, I built resilient background queues.\n\nBest,\nAshish';
+  const genericBody = 'Hi Team,\n\nI am a backend developer at The Ninja Studio building distributed systems with NestJS and PostgreSQL.\n\nIn my previous work on BullMQ Notification System, I built resilient background queues.\n\nI have attached my resume for context.\n\nBest,\nAshish';
   const qualityOnLowMatch = qualityService.evaluateDraft('Backend engineering inquiry', genericBody, apolloCompany, zeroMatchResult);
 
   assert(qualityOnLowMatch.relevanceScore === 0, `Relevance score reflects 0 without artificial floor (got ${qualityOnLowMatch.relevanceScore})`);
@@ -521,13 +521,18 @@ async function runPhase4Phase5Tests() {
 
   // Test 10D: V2 Conversion Scoring & Quality Gates
   // Compliant V2 email
-  const compliantV2Body = `I'm a final-year Electronics and Computer Engineering student at VIT Chennai currently working as a Backend Developer Intern at Goklaim, and I'm reaching out because I'm interested in backend engineering opportunities at PostHog.
+  const compliantV2Body = `Hi, I'm Ashish. I spend my time building backend services and distributed infrastructure at The Ninja Studio here in India.
 
-I've been following PostHog's Product Analytics and was impressed by your distributed architecture handling event pipelines.
+A lot of my recent work has been around event processing and telemetry pipelines, which is why PostHog stood out.
 
-At Goklaim, I engineered an idempotent, replay-safe BullMQ notification system using Redis, NestJS, and PostgreSQL, cutting background job latency by 40% under peak loads.
+One project I owned was building an event logging pipeline with NestJS, Redis, and PostgreSQL used across our core services to trace user activity reliably.
 
-I've attached my resume and would appreciate consideration for any backend engineering opportunities on your team.`;
+If there are any software engineering opportunities that align with my background, I'd be grateful for the opportunity to be considered. I've attached my resume.
+
+Best,
+Ashish Raj
+GitHub: https://github.com/AshishRajx7
+LinkedIn: https://linkedin.com/in/ashishrajx7`;
 
   const compliantResult = qualityService.evaluateDraft(
     'Backend Engineer Application — Ashish Raj',

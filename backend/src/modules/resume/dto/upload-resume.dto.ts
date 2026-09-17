@@ -18,4 +18,13 @@ export class UploadResumeDto {
   @IsString()
   @MaxLength(100)
   label?: string;
+
+  @ApiPropertyOptional({
+    type: 'string',
+    description: 'Resume specialization category (BACKEND, AI_ML, FULL_STACK, CUSTOM)',
+    example: 'BACKEND',
+  })
+  @IsOptional()
+  @IsString()
+  category?: string;
 }

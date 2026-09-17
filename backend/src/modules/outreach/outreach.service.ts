@@ -14,8 +14,11 @@ import { DraftQuality } from './entities/draft-quality.entity';
 import { EmailDraftVariant, EmailVariantType } from './entities/email-draft-variant.entity';
 import { Prospect, ProspectResearchStatus, ProspectDraftStatus } from '../prospects/entities/prospect.entity';
 import { Campaign } from '../campaigns/entities/campaign.entity';
+import { CandidateProfile } from '../resume/entities/candidate-profile.entity';
+import { ResumeFile } from '../resume/entities/resume-file.entity';
 import { GmailDraftService, GmailDraftResult, EmailAttachment } from './services/gmail-draft.service';
 import { EmailGenerationService } from './services/email-generation.service';
+import { CandidateMatchingService } from './services/candidate-matching.service';
 import { StorageService } from '../storage/storage.service';
 import {
   QUEUE_DRAFT_GENERATION,
@@ -46,8 +49,13 @@ export class OutreachService {
     private readonly prospectRepository: Repository<Prospect>,
     @InjectRepository(Campaign)
     private readonly campaignRepository: Repository<Campaign>,
+    @InjectRepository(CandidateProfile)
+    private readonly candidateProfileRepository: Repository<CandidateProfile>,
+    @InjectRepository(ResumeFile)
+    private readonly resumeFileRepository: Repository<ResumeFile>,
     private readonly gmailDraftService: GmailDraftService,
     private readonly emailGenerationService: EmailGenerationService,
+    private readonly candidateMatchingService: CandidateMatchingService,
     private readonly storageService: StorageService,
     @InjectQueue(QUEUE_DRAFT_GENERATION)
     private readonly draftQueue: Queue,
@@ -59,6 +67,9 @@ export class OutreachService {
    * Enqueues draft generation jobs for all researched prospects inside a campaign.
    */
   async generateDraftsForCampaign(campaignId: string): Promise<{ queuedCount: number; campaignId: string }> {
+    if (!campaignId || typeof campaignId !== 'string' || !campaignId.trim()) {
+      throw new BadRequestException('Invalid campaign ID provided');
+    }
     const campaign = await this.campaignRepository.findOne({ where: { id: campaignId } });
     if (!campaign) {
       throw new NotFoundException(`Campaign with ID ${campaignId} not found`);
@@ -139,6 +150,9 @@ export class OutreachService {
    * Finds a single draft by ID with all relations.
    */
   async findDraftById(id: string): Promise<EmailDraft> {
+    if (!id || typeof id !== 'string' || !id.trim()) {
+      throw new BadRequestException('Invalid draft ID provided');
+    }
     const draft = await this.emailDraftRepository.findOne({
       where: { id },
       relations: [
@@ -217,7 +231,7 @@ export class OutreachService {
   }
 
   /**
-   * Regenerates AI draft for a prospect.
+   * Regenerates AI draft for a prospect using currently selected resume or optimal match.
    */
   async regenerateDraft(id: string): Promise<EmailDraft> {
     const draft = await this.findDraftById(id);
@@ -227,16 +241,173 @@ export class OutreachService {
       throw new BadRequestException('Company profile not linked for this prospect');
     }
 
+    const allCandidates = await this.candidateProfileRepository.find({
+      relations: ['resumeFile'],
+    });
+
+    const activeResumeId = draft.reasoning?.selectedResumeId;
+    const multiResumeMatch = this.candidateMatchingService.selectBestResumeForCompany(
+      allCandidates.length > 0 ? allCandidates : [prospect.campaign.candidateProfile],
+      prospect.companyProfile,
+      activeResumeId || undefined,
+    );
+
     const result = await this.emailGenerationService.generatePersonalizedDraft(
       prospect,
       prospect.companyProfile,
-      prospect.campaign.candidateProfile,
+      multiResumeMatch.selectedCandidate,
+      multiResumeMatch,
     );
 
     draft.subject = result.subject;
     draft.body = result.body;
     draft.status = OutreachDraftStatus.GENERATED;
     const saved = await this.emailDraftRepository.save(draft);
+
+    // Update DraftReasoning
+    let reasoning = await this.draftReasoningRepository.findOne({ where: { emailDraftId: saved.id } });
+    if (!reasoning) {
+      reasoning = this.draftReasoningRepository.create({ emailDraftId: saved.id });
+    }
+    reasoning.chosenProject = result.matchResult.chosenProject;
+    reasoning.matchScore = multiResumeMatch.matchScore;
+    reasoning.whyCompany = result.whyCompany;
+    reasoning.whyMe = result.whyMe;
+    reasoning.whyNow = result.whyNow;
+    reasoning.whyRelevant = result.whyRelevant;
+    reasoning.matchedTechnologies = result.matchResult.matchedTechnologies;
+    reasoning.rankedMatches = result.matchResult.rankedMatches;
+    reasoning.confidenceLevel = result.confidenceLevel;
+
+    reasoning.selectedResumeId = multiResumeMatch.selectedResumeId || null;
+    reasoning.selectedResumeName = multiResumeMatch.selectedResumeName || null;
+    reasoning.selectedResumeCategory = multiResumeMatch.selectedResumeCategory || null;
+    reasoning.selectionReason = multiResumeMatch.selectionReason || null;
+    reasoning.evidenceUsed = multiResumeMatch.evidenceUsedInEmail || [];
+    reasoning.projectsReferenced = multiResumeMatch.projectsReferenced || [];
+    reasoning.keyMatches = multiResumeMatch.keyMatches || [];
+    reasoning.reasonContactChosen = result.reasonContactChosen || null;
+    reasoning.whyMePoints = multiResumeMatch.whyMePoints || [];
+    reasoning.missingSkills = multiResumeMatch.missingSkills || [];
+    reasoning.recommendedTalkingPoints = multiResumeMatch.recommendedTalkingPoints || [];
+    reasoning.allResumeScores = multiResumeMatch.allResumeScores || [];
+    await this.draftReasoningRepository.save(reasoning);
+
+    // Update DraftQuality
+    let quality = await this.draftQualityRepository.findOne({ where: { emailDraftId: saved.id } });
+    if (!quality) {
+      quality = this.draftQualityRepository.create({ emailDraftId: saved.id });
+    }
+    quality.personalizationScore = result.quality.personalizationScore;
+    quality.relevanceScore = result.quality.relevanceScore;
+    quality.spamRiskScore = result.quality.spamRiskScore;
+    quality.technicalAlignmentScore = result.quality.technicalAlignmentScore;
+    quality.confidenceScore = result.quality.confidenceScore;
+    quality.requiresManualReview = result.quality.requiresManualReview;
+    quality.flags = result.quality.flags;
+    await this.draftQualityRepository.save(quality);
+
+    // Re-save variants
+    await this.variantRepository.delete({ emailDraftId: saved.id });
+    for (const v of result.variants) {
+      const variantEntity = this.variantRepository.create({
+        emailDraftId: saved.id,
+        variantType: v.variantType,
+        subject: v.subject,
+        body: v.body,
+        wordCount: v.wordCount,
+        personalizationScore: v.quality.personalizationScore,
+        relevanceScore: v.quality.relevanceScore,
+        spamRiskScore: v.quality.spamRiskScore,
+        technicalAlignmentScore: v.quality.technicalAlignmentScore,
+        confidenceScore: v.quality.confidenceScore,
+        isSelected: v.isSelected,
+      });
+      await this.variantRepository.save(variantEntity);
+    }
+
+    return this.findDraftById(saved.id);
+  }
+
+  /**
+   * Overrides the selected resume for a draft and regenerates the email tailored to that resume.
+   */
+  async overrideResumeAndRegenerate(id: string, resumeId: string): Promise<EmailDraft> {
+    const draft = await this.findDraftById(id);
+    const prospect = draft.prospect;
+
+    if (!prospect.companyProfile) {
+      throw new BadRequestException('Company profile not linked for this prospect');
+    }
+
+    const allCandidates = await this.candidateProfileRepository.find({
+      relations: ['resumeFile'],
+    });
+
+    if (!allCandidates || allCandidates.length === 0) {
+      throw new BadRequestException('No candidate resume profiles found');
+    }
+
+    const multiResumeMatch = this.candidateMatchingService.selectBestResumeForCompany(
+      allCandidates,
+      prospect.companyProfile,
+      resumeId,
+    );
+
+    const result = await this.emailGenerationService.generatePersonalizedDraft(
+      prospect,
+      prospect.companyProfile,
+      multiResumeMatch.selectedCandidate,
+      multiResumeMatch,
+    );
+
+    draft.subject = result.subject;
+    draft.body = result.body;
+    draft.status = OutreachDraftStatus.GENERATED;
+    const saved = await this.emailDraftRepository.save(draft);
+
+    // Update DraftReasoning
+    let reasoning = await this.draftReasoningRepository.findOne({ where: { emailDraftId: saved.id } });
+    if (!reasoning) {
+      reasoning = this.draftReasoningRepository.create({ emailDraftId: saved.id });
+    }
+    reasoning.chosenProject = result.matchResult.chosenProject;
+    reasoning.matchScore = multiResumeMatch.matchScore;
+    reasoning.whyCompany = result.whyCompany;
+    reasoning.whyMe = result.whyMe;
+    reasoning.whyNow = result.whyNow;
+    reasoning.whyRelevant = result.whyRelevant;
+    reasoning.matchedTechnologies = result.matchResult.matchedTechnologies;
+    reasoning.rankedMatches = result.matchResult.rankedMatches;
+    reasoning.confidenceLevel = result.confidenceLevel;
+
+    reasoning.selectedResumeId = multiResumeMatch.selectedResumeId || null;
+    reasoning.selectedResumeName = multiResumeMatch.selectedResumeName || null;
+    reasoning.selectedResumeCategory = multiResumeMatch.selectedResumeCategory || null;
+    reasoning.selectionReason = multiResumeMatch.selectionReason || null;
+    reasoning.evidenceUsed = multiResumeMatch.evidenceUsedInEmail || [];
+    reasoning.projectsReferenced = multiResumeMatch.projectsReferenced || [];
+    reasoning.keyMatches = multiResumeMatch.keyMatches || [];
+    reasoning.reasonContactChosen = result.reasonContactChosen || null;
+    reasoning.whyMePoints = multiResumeMatch.whyMePoints || [];
+    reasoning.missingSkills = multiResumeMatch.missingSkills || [];
+    reasoning.recommendedTalkingPoints = multiResumeMatch.recommendedTalkingPoints || [];
+    reasoning.allResumeScores = multiResumeMatch.allResumeScores || [];
+    await this.draftReasoningRepository.save(reasoning);
+
+    // Update DraftQuality
+    let quality = await this.draftQualityRepository.findOne({ where: { emailDraftId: saved.id } });
+    if (!quality) {
+      quality = this.draftQualityRepository.create({ emailDraftId: saved.id });
+    }
+    quality.personalizationScore = result.quality.personalizationScore;
+    quality.relevanceScore = result.quality.relevanceScore;
+    quality.spamRiskScore = result.quality.spamRiskScore;
+    quality.technicalAlignmentScore = result.quality.technicalAlignmentScore;
+    quality.confidenceScore = result.quality.confidenceScore;
+    quality.requiresManualReview = result.quality.requiresManualReview;
+    quality.flags = result.quality.flags;
+    await this.draftQualityRepository.save(quality);
 
     // Re-save variants
     await this.variantRepository.delete({ emailDraftId: saved.id });
@@ -262,6 +433,7 @@ export class OutreachService {
 
   /**
    * Creates a Gmail draft in user's Gmail account (MANDATORY APPROVAL CHECK).
+   * Attaches the selected resume PDF matching draft reasoning or campaign active resume.
    */
   async createGmailDraft(id: string): Promise<GmailDraftResult> {
     const draft = await this.findDraftById(id);
@@ -273,14 +445,35 @@ export class OutreachService {
       );
     }
 
-    const candidateProfile = draft.prospect.campaign?.candidateProfile;
-    const resumeFile = candidateProfile?.resumeFile;
+    // Attachment lookup: Check selectedResumeId from reasoning first, then campaign candidateProfile
+    let resumeFile: ResumeFile | null = null;
+    let candidateName = 'Ashish Raj';
+
+    if (draft.reasoning?.selectedResumeId) {
+      resumeFile = await this.resumeFileRepository.findOne({
+        where: { id: draft.reasoning.selectedResumeId },
+      });
+      const candProfile = await this.candidateProfileRepository.findOne({
+        where: { resumeFileId: draft.reasoning.selectedResumeId },
+      });
+      if (candProfile?.name) {
+        candidateName = candProfile.name;
+      }
+    }
+
+    if (!resumeFile) {
+      const candidateProfile = draft.prospect.campaign?.candidateProfile;
+      resumeFile = candidateProfile?.resumeFile || null;
+      if (candidateProfile?.name) {
+        candidateName = candidateProfile.name;
+      }
+    }
+
     let attachment: EmailAttachment | undefined;
 
     if (resumeFile?.storagePath) {
       try {
         const fileBuffer = await this.storageService.readFile(resumeFile.storagePath);
-        const candidateName = candidateProfile?.name?.trim() || 'Candidate';
         const sanitizedFilename = `Resume - ${candidateName.replace(/[^a-zA-Z0-9 _-]/g, '')}.pdf`;
         attachment = {
           filename: sanitizedFilename,
@@ -297,7 +490,7 @@ export class OutreachService {
       }
     }
 
-    const candidateProfileId = candidateProfile?.id;
+    const candidateProfileId = draft.prospect.campaign?.candidateProfile?.id;
     const result = await this.gmailDraftService.createDraft(
       draft.id,
       draft.prospect.email,
@@ -336,6 +529,9 @@ export class OutreachService {
     alreadyCreated: number;
     failed: number;
   }> {
+    if (!campaignId || typeof campaignId !== 'string' || !campaignId.trim()) {
+      throw new BadRequestException('Invalid campaign ID provided');
+    }
     const campaign = await this.campaignRepository.findOne({ where: { id: campaignId } });
     if (!campaign) {
       throw new NotFoundException(`Campaign with ID ${campaignId} not found`);

@@ -67,7 +67,7 @@ export class ResumeController {
     file: Express.Multer.File,
     @Body() uploadDto: UploadResumeDto,
   ): Promise<ResumeResponseDto> {
-    return await this.resumeService.upload(file, uploadDto.label);
+    return await this.resumeService.upload(file, uploadDto.label, uploadDto.category);
   }
 
   @Get()

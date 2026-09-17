@@ -24,6 +24,7 @@ import { DraftReasoning } from '../../outreach/entities/draft-reasoning.entity';
 import { DraftQuality } from '../../outreach/entities/draft-quality.entity';
 import { EmailDraftVariant } from '../../outreach/entities/email-draft-variant.entity';
 import { EmailGenerationService } from '../../outreach/services/email-generation.service';
+import { CandidateMatchingService } from '../../outreach/services/candidate-matching.service';
 
 @Processor(QUEUE_DRAFT_GENERATION, { concurrency: 5 })
 export class DraftGenerationProcessor extends WorkerHost {
@@ -47,6 +48,7 @@ export class DraftGenerationProcessor extends WorkerHost {
     @InjectRepository(EmailDraftVariant)
     private readonly variantRepository: Repository<EmailDraftVariant>,
     private readonly emailGenerationService: EmailGenerationService,
+    private readonly candidateMatchingService: CandidateMatchingService,
     @InjectQueue(QUEUE_DRAFT_GENERATION)
     private readonly draftQueue: Queue,
     @InjectQueue(QUEUE_GMAIL_DRAFT)
@@ -127,13 +129,21 @@ export class DraftGenerationProcessor extends WorkerHost {
       throw new Error(prospect.error);
     }
 
-    const candidate = await this.candidateProfileRepository.findOne({
-      where: { id: candidateProfileId || prospect.campaign.candidateProfileId },
+    const allCandidates = await this.candidateProfileRepository.find({
+      relations: ['resumeFile'],
     });
 
-    if (!candidate) {
-      throw new Error(`Candidate profile not found`);
+    if (!allCandidates || allCandidates.length === 0) {
+      throw new Error(`No candidate resume profiles found for draft generation`);
     }
+
+    const multiResumeMatch = this.candidateMatchingService.selectBestResumeForCompany(
+      allCandidates,
+      prospect.companyProfile,
+      candidateProfileId,
+    );
+
+    const candidate = multiResumeMatch.selectedCandidate;
 
     // Notice: If company research score < 40, log notice and generate using calibrated LOW_MATCH / generic tier
     if ((prospect.companyProfile.researchScore || 0) < 40) {
@@ -151,6 +161,7 @@ export class DraftGenerationProcessor extends WorkerHost {
         prospect,
         prospect.companyProfile,
         candidate,
+        multiResumeMatch,
       );
 
       // Save EmailDraft (Auto-approved for seamless automated pipeline)
@@ -171,7 +182,7 @@ export class DraftGenerationProcessor extends WorkerHost {
         reasoning = this.draftReasoningRepository.create({ emailDraftId: savedDraft.id });
       }
       reasoning.chosenProject = result.matchResult.chosenProject;
-      reasoning.matchScore = result.matchResult.matchScore;
+      reasoning.matchScore = multiResumeMatch.matchScore;
       reasoning.whyCompany = result.whyCompany;
       reasoning.whyMe = result.whyMe;
       reasoning.whyNow = result.whyNow;
@@ -179,6 +190,19 @@ export class DraftGenerationProcessor extends WorkerHost {
       reasoning.matchedTechnologies = result.matchResult.matchedTechnologies;
       reasoning.rankedMatches = result.matchResult.rankedMatches;
       reasoning.confidenceLevel = result.confidenceLevel;
+
+      reasoning.selectedResumeId = multiResumeMatch.selectedResumeId || null;
+      reasoning.selectedResumeName = multiResumeMatch.selectedResumeName || null;
+      reasoning.selectedResumeCategory = multiResumeMatch.selectedResumeCategory || null;
+      reasoning.selectionReason = multiResumeMatch.selectionReason || null;
+      reasoning.evidenceUsed = multiResumeMatch.evidenceUsedInEmail || [];
+      reasoning.projectsReferenced = multiResumeMatch.projectsReferenced || [];
+      reasoning.keyMatches = multiResumeMatch.keyMatches || [];
+      reasoning.reasonContactChosen = result.reasonContactChosen || null;
+      reasoning.whyMePoints = multiResumeMatch.whyMePoints || [];
+      reasoning.missingSkills = multiResumeMatch.missingSkills || [];
+      reasoning.recommendedTalkingPoints = multiResumeMatch.recommendedTalkingPoints || [];
+      reasoning.allResumeScores = multiResumeMatch.allResumeScores || [];
       await this.draftReasoningRepository.save(reasoning);
 
       // Save DraftQuality
