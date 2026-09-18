@@ -45,6 +45,11 @@ export const draftService = {
     return data;
   },
 
+  async overrideResume(id: string, resumeId: string): Promise<EmailDraft> {
+    const { data } = await api.post<EmailDraft>(`/drafts/${id}/override-resume`, { resumeId });
+    return data;
+  },
+
   async createGmailDraft(id: string): Promise<GmailDraftResult> {
     const { data } = await api.post<GmailDraftResult>(`/drafts/${id}/create-gmail-draft`);
     return data;

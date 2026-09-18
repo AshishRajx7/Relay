@@ -100,7 +100,7 @@ export class CandidateMatchingService {
     this.matchingModel =
       this.configService?.get<string>('ai.matchingModel') ||
       this.configService?.get<string>('ai.model') ||
-      'meta/llama-3.2-11b-vision-instruct';
+      'nvidia/nemotron-3-super-120b-a12b';
   }
 
   /**
@@ -289,16 +289,23 @@ export class CandidateMatchingService {
     company: CompanyProfile,
     candidate: CandidateProfile,
   ): CandidateMatchResult {
-    const companyTechSignals = (company?.techSignals || []).map((t) => t.toLowerCase());
+    const companyTechSignals = (company?.techSignals || []).map((t: any) =>
+      typeof t === 'string' ? t.toLowerCase() : String(t?.name || t?.tech || t?.category || '').toLowerCase()
+    );
     const companyIndustry = (company?.industry || '').toLowerCase();
     const companyBusinessModel = (company?.businessModel || '').toLowerCase();
-    const hiringSignals = (company?.hiringSignals || []).map((h) => h.toLowerCase());
+    const hiringSignals = (company?.hiringSignals || []).map((h: any) =>
+      typeof h === 'string' ? h.toLowerCase() : `${h?.role || ''} ${h?.requirement || ''} ${h?.title || ''}`.toLowerCase()
+    );
     const companySummary = (company?.summary || '').toLowerCase();
 
     // Problem context incorporates summary, verified products, and hiring signals
+    const productStrings = (company?.products || []).map((p: any) =>
+      typeof p === 'string' ? p : (p?.name || p?.title || '')
+    );
     const problemContext = [
       companySummary,
-      ...(company?.products || []),
+      ...productStrings,
       ...hiringSignals,
     ].join(' ').toLowerCase();
 
@@ -423,13 +430,14 @@ export class CandidateMatchingService {
       personalizationTier = PersonalizationTier.LOW_MATCH;
     }
 
+    const cleanItemDesc = (topMatch.item.description || topMatch.item.name || '').replace(/^\s*\((.*)\)\s*$/, '$1').trim();
     let whyRelevant: string;
     if (personalizationTier === PersonalizationTier.HIGH_MATCH) {
-      whyRelevant = `${company?.companyName || 'The company'} utilizes ${matchedTechnologies.join(', ')}. Candidate's production work on ${topMatch.item.name} directly mirrors this technical stack.`;
+      whyRelevant = `Relevant engineering experience on ${topMatch.item.name} with ${matchedTechnologies.join(', ')}.`;
     } else if (personalizationTier === PersonalizationTier.MEDIUM_MATCH) {
-      whyRelevant = `${company?.companyName || 'The company'} is focused on ${company?.industry || 'modern software engineering'} and ${company?.businessModel || 'platform solutions'}. Candidate's engineering work on ${topMatch.item.name} (${topMatch.item.description}) aligns with their platform challenges.`;
+      whyRelevant = `Relevant engineering experience on ${topMatch.item.name}: ${cleanItemDesc}.`;
     } else {
-      whyRelevant = `General software engineering inquiry. Candidate's experience building ${topMatch.item.name} showcases core backend engineering, distributed systems, and rapid learning ability.`;
+      whyRelevant = `Backend engineering experience on ${topMatch.item.name}: ${cleanItemDesc}.`;
     }
 
     return {
@@ -457,7 +465,9 @@ export class CandidateMatchingService {
       throw new Error('No candidate profiles provided for multi-resume evaluation');
     }
 
-    const companyTechSignals = (company?.techSignals || []).map((t) => t.toLowerCase());
+    const companyTechSignals = (company?.techSignals || []).map((t: any) =>
+      typeof t === 'string' ? t.toLowerCase() : String(t?.name || t?.tech || t?.category || '').toLowerCase()
+    );
     const companySummary = (company?.summary || '').toLowerCase();
     const companyIndustry = (company?.industry || '').toLowerCase();
     const isAiMlCompany = /ai|machine learning|llm|deep learning|vision|nlp|data science/i.test(
@@ -709,22 +719,55 @@ export class CandidateMatchingService {
     const plausiblePairs: CandidatePairCandidate[] = [];
 
     // Extract all company context tokens
-    const companyContextText = `${company.companyName} ${company.industry || ''} ${company.summary || ''} ${(company.products || []).join(' ')} ${(company.techSignals || []).join(' ')}`.toLowerCase();
+    const normalizedProducts = (company.products || []).map((p: any) => typeof p === 'string' ? p : (p?.name || p?.title || '')).join(' ');
+    const normalizedTechs = (company.techSignals || []).map((t: any) => typeof t === 'string' ? t : (t?.name || t?.tech || '')).join(' ');
+    const companyContextText = `${company.companyName} ${company.industry || ''} ${company.summary || ''} ${normalizedProducts} ${normalizedTechs}`.toLowerCase();
     const companyContextTokens = extractTokens(companyContextText);
 
-    // If company evidence records are missing, synthesize temporary company evidence representation from summary
-    let evaluationCompanyEvidences = companyEvidences;
-    if (evaluationCompanyEvidences.length === 0 && hasCompanySignals) {
-      evaluationCompanyEvidences = [
+    // Filter out purely generic cultural / recruiting fluff quotes that lack technical substance
+    const isGenericRecruiting = (text: string) =>
+      /looking for talented people|join our team|collaborative culture|values expertise|make an impact/i.test(text || '');
+
+    const technicalCompanyEvidences = companyEvidences.filter(
+      (e) => !isGenericRecruiting(e.verbatimQuote) && !isGenericRecruiting(e.atomicClaim),
+    );
+
+    // Complement company evidence with verified product initiatives and architectural summary
+    const synthesizedEvidences: CompanyEvidenceEntity[] = [];
+    if (company.products && Array.isArray(company.products)) {
+      for (const prod of company.products) {
+        const prodName = typeof prod === 'string' ? prod.trim() : String((prod as any)?.name || '').trim();
+        if (prodName.length > 2) {
+          synthesizedEvidences.push(
+            this.companyEvidenceRepo.create({
+              companyProfileId: company.id,
+              verbatimQuote: `${company.companyName} product: ${prodName}`,
+              atomicClaim: `${company.companyName} develops and provides ${prodName}.`,
+              category: 'PRODUCT',
+              confidence: 1.0,
+              isSourceFact: true,
+            }),
+          );
+        }
+      }
+    }
+
+    if (company.summary && company.summary.trim().length > 30) {
+      synthesizedEvidences.push(
         this.companyEvidenceRepo.create({
           companyProfileId: company.id,
-          verbatimQuote: company.summary || (company.products || []).join(', '),
-          atomicClaim: company.summary || 'Company engineering initiative',
-          category: 'PRODUCT',
+          verbatimQuote: company.summary,
+          atomicClaim: company.summary,
+          category: 'ARCHITECTURE',
           confidence: 1.0,
           isSourceFact: true,
         }),
-      ];
+      );
+    }
+
+    let evaluationCompanyEvidences = [...technicalCompanyEvidences, ...synthesizedEvidences];
+    if (evaluationCompanyEvidences.length === 0) {
+      evaluationCompanyEvidences = companyEvidences;
     }
 
     for (const cEv of primaryCandidateEvidences) {
@@ -825,17 +868,16 @@ Evaluate each candidate ↔ company pair across explicit qualitative criteria:
 2. evidenceSpecificity: "HIGH" | "MEDIUM" | "LOW"
 3. candidateOwnership: "PRIMARY" | "CONTRIBUTOR" | "SUPPORTING"
 4. companyEvidenceStrength: "CLEAR_ACUTE_NEED" | "GENERAL_TECH" | "SPECULATIVE"
-   - CLEAR_ACUTE_NEED: Company is building or solving a specific, acute engineering challenge (e.g. multi-tenant authorization scale, high-throughput queue idempotency, vendor order routing).
-   - GENERAL_TECH: Company merely uses standard baseline tools (Node.js, PostgreSQL, AWS, Docker, HTML5, WordPress, basic web portals) without an acute architectural problem.
-   - SPECULATIVE: Unverified or vague technical requirement.
+   - CLEAR_ACUTE_NEED: Company is building or solving a specific product or engineering initiative (e.g. building a compliance/regtech platform, SaaS accelerators, multi-tenant authorization, queue infrastructure, order workflows, AI platform).
+   - GENERAL_TECH: Company merely lists standard baseline tools (Node.js, PostgreSQL, AWS, Docker, HTML5) without an initiative or product challenge.
+   - SPECULATIVE: Unverified or vague technical claim.
 5. architecturalCorrespondence: "EXACT_PARALLEL" | "SIMILAR_CLASS" | "DIVERGENT"
    - EXACT_PARALLEL: Solves the exact same engineering challenge or system class.
-   - SIMILAR_CLASS: Related backend architecture or infrastructure pattern.
-   - DIVERGENT: Fundamentally different technical domain or problem space.
+   - SIMILAR_CLASS: Related backend architecture or infrastructure pattern (e.g. compliance platforms ↔ audit trails/activity logging; enterprise platforms ↔ platform services).
+   - DIVERGENT: Fundamentally different technical domain or problem space (e.g. GPU kernels vs web storefront).
 6. genericOverlapOnly: boolean
-   - If companyEvidenceStrength is GENERAL_TECH or SPECULATIVE, AND candidate evidence is merely common tooling (e.g. Node.js, PostgreSQL, Docker) without domain/architectural overlap, flag genericOverlapOnly = true.
-   - MUST be true for digital marketing agencies, generic web design shops, or small business brochure/portal builders.
-   - If candidate and company share genuine architectural patterns (such as microservices, event-driven platforms, audit logging, authorization systems, or compliance workflows), genericOverlapOnly is FALSE.
+   - TRUE ONLY IF the overlap is solely generic buzzwords or baseline tooling (e.g. both simply mention AWS, React, Python, or SQL) with NO architectural pattern or product challenge in common.
+   - FALSE whenever there is a genuine architectural or domain connection (e.g. regtech/compliance platforms, audit logging, authorization systems, event-driven services, queue infrastructure, API integration, or data workflows).
    - If genericOverlapOnly is true, set relationshipQuality to "DISQUALIFIED_GENERIC_OVERLAP" and rankingScore <= 35.
 7. relationshipQuality: "HIGH" | "MODERATE" | "WEAK" | "DISQUALIFIED_GENERIC_OVERLAP"
    - HIGH: Direct architectural match with CLEAR_ACUTE_NEED and high specificity.
@@ -901,7 +943,9 @@ Output pure JSON conforming to:
         temperature: 0.1,
       });
 
+      this.logger.log(`EVALUATING PAIRS: ${JSON.stringify(pairSummaries.map(p => ({ idx: p.pairIndex, cand: p.candidateDeliverable, comp: p.companyClaim.slice(0, 40) })))}`);
       const evaluations = aiResponse.data.evaluations || [];
+      this.logger.log(`RAW EVALUATIONS: ${JSON.stringify(evaluations)}`);
 
       // Rank by quality first (HIGH > MODERATE > WEAK > DISQUALIFIED_GENERIC_OVERLAP), then rankingScore
       const qualityRank: Record<string, number> = {

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { motion } from 'framer-motion';
 import { Save, Check, AlertTriangle, FileText } from 'lucide-react';
 import { EmailDraft } from '../../types/draft';
 
@@ -65,66 +66,62 @@ export const CenterEditorPanel: React.FC<CenterEditorPanelProps> = ({
     .filter((w) => w.length > 0);
   const wordCount = words.length;
 
-  // V7 Outreach guidelines:
-  // Target: 65-80 words
-  // Acceptable: 55-90 words
-  // Hard max: 95 words
   const isTarget = wordCount >= 65 && wordCount <= 80;
   const isAcceptable = wordCount >= 55 && wordCount <= 90;
   const isTooLong = wordCount > 95;
   const isTooShort = wordCount < 45 && wordCount > 0;
 
-  let wordCountColor = 'text-relay-muted';
-  let wordCountBadge = 'bg-relay-bg text-relay-muted border-relay-border';
+  let wordCountBadge = 'bg-[#0D1117] text-[#94A3B8] border-slate-800';
 
   if (isTarget) {
-    wordCountColor = 'text-relay-accent font-semibold';
-    wordCountBadge = 'bg-relay-accent/10 text-relay-accent border-relay-accent/30';
+    wordCountBadge = 'bg-[#C8F25C]/15 text-[#C8F25C] border-[#C8F25C]/40 font-semibold';
   } else if (isAcceptable) {
-    wordCountColor = 'text-relay-text';
-    wordCountBadge = 'bg-relay-card text-relay-text border-relay-border';
+    wordCountBadge = 'bg-[#1E293B] text-[#F8FAFC] border-slate-700/60';
   } else if (isTooLong || isTooShort) {
-    wordCountColor = 'text-amber-400 font-semibold';
-    wordCountBadge = 'bg-amber-500/10 text-amber-400 border-amber-500/30';
+    wordCountBadge = 'bg-amber-500/15 text-amber-400 border-amber-500/30 font-semibold';
   }
 
   return (
-    <div className="h-full flex flex-col bg-relay-bg">
+    <div className="h-full min-h-0 flex flex-col bg-[#0D1117]">
       {/* Top Editor Bar */}
-      <div className="px-6 py-3.5 border-b border-relay-border flex items-center justify-between bg-relay-card/40">
+      <div className="px-5 py-3 border-b border-slate-800 flex items-center justify-between bg-[#161F2C]/90 shrink-0">
         <div className="flex items-center gap-2">
-          <FileText className="w-4 h-4 text-relay-muted" />
-          <span className="text-xs font-mono font-medium text-relay-text">
-            Draft Editor
+          <FileText className="w-4 h-4 text-[#C8F25C]" />
+          <span className="text-xs font-mono font-medium text-[#F8FAFC]">
+            Email Editor
           </span>
-          <span className="text-[10px] font-mono text-relay-subtle">
-            (Markdown / Plain-text)
+          <span className="text-[10px] font-mono text-[#64748B]">
+            (Human Engineer Voice)
           </span>
         </div>
 
         <div className="flex items-center gap-3">
-          {/* Save Status */}
+          {/* Save Status Feedback */}
           <div className="text-[11px] font-mono flex items-center gap-1.5">
             {isSaving ? (
-              <span className="text-relay-accent animate-pulse">Saving...</span>
+              <span className="text-[#C8F25C] animate-pulse">Saving...</span>
             ) : justSaved ? (
-              <span className="text-relay-success flex items-center gap-1">
+              <motion.span
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                className="text-[#C8F25C] flex items-center gap-1 font-medium"
+              >
                 <Check className="w-3.5 h-3.5" /> Saved
-              </span>
+              </motion.span>
             ) : isDirty ? (
               <span className="text-amber-400 flex items-center gap-1">
-                <AlertTriangle className="w-3.5 h-3.5" /> Unsaved changes
+                <AlertTriangle className="w-3.5 h-3.5" /> Unsaved
               </span>
             ) : (
-              <span className="text-relay-subtle">Saved to database</span>
+              <span className="text-[#64748B]">Saved to DB</span>
             )}
           </div>
 
           <button
             onClick={handleSave}
             disabled={!isDirty || isSaving}
-            className="flex items-center gap-1.5 px-3 py-1 text-xs font-mono rounded border border-relay-border bg-relay-card text-relay-text hover:bg-relay-card-hover hover:border-relay-border-light disabled:opacity-40 disabled:cursor-not-allowed transition-all"
-            title="Save changes (Ctrl+S)"
+            className="flex items-center gap-1.5 px-3 py-1 text-xs font-mono rounded-lg border border-slate-700/60 bg-[#1E293B] text-[#F8FAFC] hover:border-[#C8F25C]/50 hover:text-[#C8F25C] disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-xs"
+            title="Save changes (Ctrl+S / ⌘S)"
           >
             <Save className="w-3.5 h-3.5" />
             Save
@@ -133,14 +130,14 @@ export const CenterEditorPanel: React.FC<CenterEditorPanelProps> = ({
       </div>
 
       {/* Editor Main Content */}
-      <div className="flex-1 flex flex-col p-6 overflow-hidden space-y-4">
-        {/* Subject Field */}
-        <div className="space-y-1.5">
+      <div className="flex-1 min-h-0 flex flex-col p-6 space-y-4 overflow-hidden">
+        {/* Subject Line */}
+        <div className="space-y-1.5 shrink-0">
           <div className="flex items-center justify-between">
-            <label className="text-[11px] font-mono uppercase tracking-wider text-relay-subtle">
+            <label className="text-[11px] font-mono uppercase tracking-wider text-[#64748B]">
               Subject Line
             </label>
-            <span className="text-[10px] font-mono text-relay-subtle">
+            <span className="text-[10px] font-mono text-[#64748B]">
               {subject.length} chars
             </span>
           </div>
@@ -148,44 +145,48 @@ export const CenterEditorPanel: React.FC<CenterEditorPanelProps> = ({
             type="text"
             value={subject}
             onChange={(e) => handleSubjectChange(e.target.value)}
-            placeholder="Draft subject..."
-            className="w-full px-3.5 py-2.5 text-sm font-medium rounded border border-relay-border bg-relay-card text-relay-text focus:outline-hidden focus:border-relay-accent font-sans transition-colors"
+            placeholder="Subject line..."
+            className="w-full px-3.5 py-2.5 text-sm font-medium rounded-lg border border-slate-800 bg-[#161F2C] text-[#F8FAFC] focus:outline-hidden focus:border-[#C8F25C] font-sans transition-colors"
           />
         </div>
 
-        {/* Body Textarea */}
-        <div className="flex-1 flex flex-col space-y-1.5 min-h-0">
+        {/* Body Textarea with JetBrains Mono */}
+        <div className="flex-1 min-h-0 flex flex-col space-y-1.5">
           <div className="flex items-center justify-between">
-            <label className="text-[11px] font-mono uppercase tracking-wider text-relay-subtle">
-              Email Body
+            <label className="text-[11px] font-mono uppercase tracking-wider text-[#64748B]">
+              Email Body (4-Paragraph Human Layout)
             </label>
-            <span className="text-[10px] font-mono text-relay-subtle">
-              Standard 4-Paragraph Human Layout
+            <span className="text-[10px] font-mono text-[#64748B]">
+              No sales buzzwords • Attached PDF resume
             </span>
           </div>
           <textarea
             value={body}
             onChange={(e) => handleBodyChange(e.target.value)}
-            placeholder="Draft body content..."
-            className="flex-1 w-full p-4 text-xs font-mono leading-relaxed rounded border border-relay-border bg-relay-card text-relay-text focus:outline-hidden focus:border-relay-accent resize-none transition-colors"
+            placeholder="Email body text..."
+            className="flex-1 min-h-0 w-full p-4 text-xs font-mono leading-relaxed rounded-lg border border-slate-800 bg-[#161F2C] text-[#F8FAFC] focus:outline-hidden focus:border-[#C8F25C] resize-none transition-colors"
           />
         </div>
       </div>
 
-      {/* Bottom Footer Stats */}
-      <div className="px-6 py-2.5 border-t border-relay-border bg-relay-card/40 flex items-center justify-between text-xs font-mono">
+      {/* Bottom Footer Telemetry */}
+      <div className="px-5 py-2.5 border-t border-slate-800 bg-[#161F2C]/90 flex items-center justify-between text-xs font-mono shrink-0">
         <div className="flex items-center gap-3">
-          <span className="text-[11px] text-relay-subtle">Word Count:</span>
-          <span className={`px-2 py-0.5 rounded border text-[11px] font-mono ${wordCountBadge}`}>
+          <span className="text-[11px] text-[#64748B]">Word Count:</span>
+          <span className={`px-2 py-0.5 rounded-md border text-[11px] font-mono ${wordCountBadge}`}>
             {wordCount} words
           </span>
-          <span className="text-[10px] text-relay-subtle">
+          <span className="text-[10px] text-[#64748B]">
             (Target: 65–80 | Hard max: 95)
           </span>
         </div>
 
-        <div className="text-[10px] text-relay-subtle">
-          Press <kbd className="px-1 py-0.5 rounded bg-relay-bg border border-relay-border text-relay-muted">Ctrl+S</kbd> to save
+        <div className="text-[10px] text-[#64748B] flex items-center gap-2">
+          <span>Press</span>
+          <kbd className="px-1.5 py-0.5 rounded bg-[#0D1117] border border-slate-800 text-[#94A3B8]">
+            ⌘S
+          </kbd>
+          <span>to save</span>
         </div>
       </div>
     </div>

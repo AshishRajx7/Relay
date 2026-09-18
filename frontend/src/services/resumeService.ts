@@ -12,10 +12,11 @@ export const resumeService = {
     return data;
   },
 
-  async upload(file: File, label?: string): Promise<ResumeResponseDto> {
+  async upload(file: File, label?: string, category?: string): Promise<ResumeResponseDto> {
     const formData = new FormData();
     formData.append('file', file);
     if (label) formData.append('label', label);
+    if (category) formData.append('category', category);
     const { data } = await api.post<ResumeResponseDto>('/resumes/upload', formData, {
       headers: {
         'Content-Type': 'multipart/form-data',

@@ -17,7 +17,9 @@ export interface CampaignOverviewDto {
   totalProspects: number;
   processedProspects: number;
   researchedProspects: number;
+  synthesizedProspects?: number;
   draftsGenerated: number;
+  approvedCount?: number;
   manualReviewCount: number;
   failedCount: number;
   gmailDraftCount: number;
@@ -35,9 +37,16 @@ export interface CampaignOverviewDto {
 }
 
 export interface IngestionResult {
-  campaignId: string;
-  totalParsed: number;
-  validProspects: number;
-  duplicatesSkipped: number;
-  message: string;
+  total: number;
+  queued: number;
+  duplicateInFile: number;
+  duplicateInQueue: number;
+  duplicateInDatabase: number;
+  campaignId?: string;
+  totalParsed?: number;
+  totalCreated?: number;
+  totalDuplicates?: number;
+  validProspects?: number;
+  duplicatesSkipped?: number;
+  message?: string;
 }

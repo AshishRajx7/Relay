@@ -1,13 +1,12 @@
 import React from 'react';
 import { createBrowserRouter, Navigate } from 'react-router-dom';
 import { AppLayout } from '../layouts/AppLayout';
-import { DashboardPage } from '../pages/DashboardPage';
-import { CampaignsPage } from '../pages/CampaignsPage';
-import { CampaignDetailPage } from '../pages/CampaignDetailPage';
-import { DraftsPage } from '../pages/DraftsPage';
-import { DraftWorkspacePage } from '../pages/DraftWorkspacePage';
 import { CompaniesPage } from '../pages/CompaniesPage';
 import { CompanyDetailPage } from '../pages/CompanyDetailPage';
+import { DraftsPage } from '../pages/DraftsPage';
+import { DraftWorkspacePage } from '../pages/DraftWorkspacePage';
+import { CampaignsPage } from '../pages/CampaignsPage';
+import { CampaignDetailPage } from '../pages/CampaignDetailPage';
 import { ResumesPage } from '../pages/ResumesPage';
 import { ResumeDetailPage } from '../pages/ResumeDetailPage';
 import { GmailPage } from '../pages/GmailPage';
@@ -20,19 +19,20 @@ export const router = createBrowserRouter([
     children: [
       {
         index: true,
-        element: <Navigate to="/campaigns" replace />,
+        // Company Page is the Entry Point (Company → Analyze Match → Generate Outreach → Review Draft → Create Gmail Draft)
+        element: <CompaniesPage />,
       },
       {
-        path: 'dashboard',
-        element: <DashboardPage />,
+        path: 'companies',
+        element: <CompaniesPage />,
       },
       {
-        path: 'campaigns',
-        element: <CampaignsPage />,
+        path: 'companies/:id',
+        element: <CompanyDetailPage />,
       },
       {
-        path: 'campaigns/:id',
-        element: <CampaignDetailPage />,
+        path: 'queue',
+        element: <DraftsPage />,
       },
       {
         path: 'drafts',
@@ -43,12 +43,12 @@ export const router = createBrowserRouter([
         element: <DraftWorkspacePage />,
       },
       {
-        path: 'companies',
-        element: <CompaniesPage />,
+        path: 'campaigns',
+        element: <CampaignsPage />,
       },
       {
-        path: 'companies/:id',
-        element: <CompanyDetailPage />,
+        path: 'campaigns/:id',
+        element: <CampaignDetailPage />,
       },
       {
         path: 'resumes',
@@ -68,7 +68,7 @@ export const router = createBrowserRouter([
       },
       {
         path: '*',
-        element: <Navigate to="/campaigns" replace />,
+        element: <Navigate to="/" replace />,
       },
     ],
   },

@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -6,32 +8,101 @@
   color-scheme: dark;
 }
 
-body {
+html, body, #root {
+  height: 100%;
+  width: 100%;
   margin: 0;
   padding: 0;
-  background-color: #060B14;
-  color: #FFFFFF;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  background-color: #0D1117; /* Linear/Cursor Slate Base Layer */
+  color: #F8FAFC;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  overflow-x: hidden;
+  overflow: hidden; /* App layout handles inner scrolling */
 }
 
-/* Custom scrollbar for operator workspace */
+/* 21st.dev Faint Grid Background with Radial Mask */
+.bg-grid-faded {
+  background-size: 32px 32px;
+  background-image: 
+    linear-gradient(to right, rgba(148, 163, 184, 0.05) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(148, 163, 184, 0.05) 1px, transparent 1px);
+  mask-image: radial-gradient(ellipse 70% 60% at 50% 25%, #000 40%, transparent 100%);
+  -webkit-mask-image: radial-gradient(ellipse 70% 60% at 50% 25%, #000 40%, transparent 100%);
+  pointer-events: none;
+}
+
+/* Subtle Linear/Arc Ambient Radial Glow */
+.bg-ambient-glow {
+  background: radial-gradient(circle 800px at 50% -120px, rgba(56, 189, 248, 0.04), rgba(200, 242, 92, 0.025), transparent 70%);
+  pointer-events: none;
+}
+
+/* Subtle noise texture overlay */
+.bg-noise-overlay {
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.02'/%3E%3C/svg%3E");
+  pointer-events: none;
+}
+
+/* JetBrains Mono strictly for telemetry, scores, code, and raw research */
+.font-mono {
+  font-family: 'JetBrains Mono', Menlo, Monaco, monospace;
+}
+
+/* Custom sleek scrollbar for operator workstation */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #060B14;
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #1B2638;
+  background: rgba(148, 163, 184, 0.15);
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #243249;
+  background: rgba(148, 163, 184, 0.28);
+}
+
+/* Resizable panel handle styles */
+[data-panel-resize-handle-enabled] {
+  transition: background-color 0.15s ease;
+  position: relative;
+}
+
+[data-panel-resize-handle-enabled]:hover,
+[data-panel-resize-handle-enabled][data-resize-handle-state="drag"] {
+  background-color: #C8F25C !important;
+  box-shadow: 0 0 10px rgba(200, 242, 92, 0.5);
+}
+
+/* Cmdk command palette styles */
+[cmdk-root] {
+  background: #161F2C;
+  border: 1px solid rgba(148, 163, 184, 0.15);
+  border-radius: 12px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.7);
+}
+
+[cmdk-input] {
+  font-family: 'Inter', sans-serif;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: #F8FAFC;
+}
+
+[cmdk-item] {
+  content-visibility: auto;
+  cursor: pointer;
+  border-radius: 6px;
+}
+
+[cmdk-item][data-selected="true"] {
+  background: #1E293B;
+  color: #C8F25C;
 }

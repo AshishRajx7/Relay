@@ -30,7 +30,9 @@ export interface CampaignOverviewDto {
   totalProspects: number;
   processedProspects: number;
   researchedProspects: number;
+  synthesizedProspects: number;
   draftsGenerated: number;
+  approvedCount: number;
   manualReviewCount: number;
   failedCount: number;
   gmailDraftCount: number;
@@ -165,7 +167,9 @@ export class CampaignsService {
 
     const totalProspects = prospects.length;
     let researchedProspects = 0;
+    let synthesizedProspects = 0;
     let draftsGenerated = 0;
+    let approvedCount = 0;
     let manualReviewCount = 0;
     let failedCount = 0;
     let gmailDraftCount = 0;
@@ -183,11 +187,25 @@ export class CampaignsService {
         failedCount++;
       }
       if (
+        p.draftStatus === ProspectDraftStatus.READY_FOR_APPROVAL ||
         p.draftStatus === ProspectDraftStatus.GENERATED ||
+        p.draftStatus === ProspectDraftStatus.APPROVED ||
+        p.draftStatus === ProspectDraftStatus.GMAIL_DRAFT_CREATED ||
+        p.draftStatus === ProspectDraftStatus.REVIEW_REQUIRED
+      ) {
+        draftsGenerated++;
+      }
+      if (
         p.draftStatus === ProspectDraftStatus.APPROVED ||
         p.draftStatus === ProspectDraftStatus.GMAIL_DRAFT_CREATED
       ) {
-        draftsGenerated++;
+        approvedCount++;
+      }
+      if (
+        p.draftStatus !== ProspectDraftStatus.PENDING &&
+        p.draftStatus !== ProspectDraftStatus.GENERATING
+      ) {
+        synthesizedProspects++;
       }
       if (p.draftStatus === ProspectDraftStatus.GMAIL_DRAFT_CREATED) {
         gmailDraftCount++;
@@ -248,7 +266,9 @@ export class CampaignsService {
       totalProspects,
       processedProspects,
       researchedProspects,
+      synthesizedProspects,
       draftsGenerated,
+      approvedCount,
       manualReviewCount,
       failedCount,
       gmailDraftCount,

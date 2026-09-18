@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   Building2,
   ArrowLeft,
@@ -9,23 +10,30 @@ import {
   RefreshCw,
   Cpu,
   Target,
-  CheckCircle2,
-  AlertCircle,
-  FileCode,
-  Users,
+  Terminal,
   ChevronDown,
   ChevronRight,
+  Shield,
+  Zap,
+  Sparkles,
+  ArrowRight,
+  Copy,
+  Check,
+  CheckCircle2,
 } from 'lucide-react';
 import { companyService } from '../services/companyService';
+import { draftService } from '../services/draftService';
 import { StatusBadge } from '../components/common/StatusBadge';
 import { ScoreGauge } from '../components/common/ScoreGauge';
 import { EmptyState } from '../components/common/EmptyState';
+import { BentoGrid, BentoGridItem } from '../components/ui/bento-grid';
 
 export const CompanyDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [showRawMarkdown, setShowRawMarkdown] = useState(false);
+  const [showTerminal, setShowTerminal] = useState(false);
+  const [copiedTerminal, setCopiedTerminal] = useState(false);
 
   // Fetch Base Company
   const { data: company, isLoading: isCompanyLoading } = useQuery({
@@ -38,19 +46,32 @@ export const CompanyDetailPage: React.FC = () => {
   const {
     data: research,
     isLoading: isResearchLoading,
-    refetch: refetchResearch,
   } = useQuery({
     queryKey: ['company-research', id],
     queryFn: () => companyService.getResearch(id!),
     enabled: !!id,
   });
 
-  // Fetch Raw Markdown if toggled
+  // Fetch Raw Markdown
   const { data: rawMarkdownData } = useQuery({
     queryKey: ['company-research-raw', id],
     queryFn: () => companyService.getRawMarkdown(id!),
-    enabled: !!id && showRawMarkdown,
+    enabled: !!id && showTerminal,
   });
+
+  // Fetch Drafts to connect Company -> Draft Review Workspace
+  const { data: drafts } = useQuery({
+    queryKey: ['drafts-all'],
+    queryFn: () => draftService.getAll(),
+  });
+
+  // Find draft associated with this company
+  const matchingDraft = (drafts || []).find(
+    (d) =>
+      d.prospect?.companyProfile?.id === id ||
+      (d.prospect?.companyName && company?.name && d.prospect.companyName.toLowerCase() === company.name.toLowerCase()) ||
+      (d.prospect?.domain && company?.normalizedDomain && d.prospect.domain.toLowerCase() === company.normalizedDomain.toLowerCase())
+  );
 
   // Trigger / Refresh Research Mutation
   const refreshMutation = useMutation({
@@ -66,21 +87,43 @@ export const CompanyDetailPage: React.FC = () => {
     },
   });
 
+  const handleCopyTerminal = () => {
+    const text = rawMarkdownData?.rawMarkdown || research?.rawMarkdown || '';
+    if (!text) return;
+    navigator.clipboard.writeText(text);
+    setCopiedTerminal(true);
+    setTimeout(() => setCopiedTerminal(false), 2000);
+  };
+
+  const handleOpenDraftWorkspace = () => {
+    if (matchingDraft) {
+      navigate(`/drafts/${matchingDraft.id}`);
+    } else if (drafts && drafts.length > 0) {
+      // Navigate to top active draft in queue
+      navigate(`/drafts/${drafts[0].id}`);
+    } else {
+      navigate('/queue');
+    }
+  };
+
   if (isCompanyLoading) {
     return (
-      <div className="flex items-center justify-center p-12 text-relay-muted font-mono text-xs">
-        Loading company intelligence...
+      <div className="h-full flex items-center justify-center p-12 text-xs font-mono text-[#94A3B8]">
+        <div className="flex items-center gap-2">
+          <RefreshCw className="w-4 h-4 animate-spin text-[#C8F25C]" />
+          Loading company intelligence dossier...
+        </div>
       </div>
     );
   }
 
   if (!company) {
     return (
-      <div className="p-8 text-center space-y-4">
-        <p className="text-relay-muted font-mono text-xs">Company not found.</p>
+      <div className="h-full flex flex-col items-center justify-center p-8 space-y-4">
+        <p className="text-[#94A3B8] font-mono text-xs">Target company not found.</p>
         <button
-          onClick={() => navigate('/companies')}
-          className="px-3 py-1.5 text-xs font-mono rounded border border-relay-border text-relay-text hover:bg-relay-card"
+          onClick={() => navigate('/')}
+          className="px-3.5 py-1.5 text-xs font-mono rounded-lg border border-slate-700/60 bg-[#161F2C] text-[#F8FAFC] hover:bg-[#1E293B] transition-colors"
         >
           Return to Companies
         </button>
@@ -89,275 +132,321 @@ export const CompanyDetailPage: React.FC = () => {
   }
 
   const hooks = research?.outreachHooks;
+  const qualityScore = research?.researchQualityScore ?? (company?.researchScore || 90);
+  const rawStreamContent = rawMarkdownData?.rawMarkdown || research?.rawMarkdown;
 
   return (
-    <div className="p-8 max-w-7xl mx-auto w-full space-y-6">
-      {/* Back Button */}
+    <div className="h-full min-h-0 overflow-y-auto flex flex-col p-8 max-w-7xl mx-auto w-full space-y-6">
+      {/* Navigation Breadcrumb */}
       <button
-        onClick={() => navigate('/companies')}
-        className="flex items-center gap-1.5 text-xs font-mono text-relay-muted hover:text-relay-text transition-colors"
+        onClick={() => navigate('/')}
+        className="self-start flex items-center gap-1.5 text-xs font-mono text-[#94A3B8] hover:text-[#F8FAFC] transition-colors"
       >
         <ArrowLeft className="w-3.5 h-3.5" />
-        <span>Back to Target Companies</span>
+        <span>Back to Companies</span>
       </button>
 
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-6 rounded-lg border border-relay-border bg-relay-card shadow-operator">
+      {/* Dossier Header Card with PROMINENT "Create Outreach" CTA */}
+      <div className="p-6 rounded-xl border border-slate-800/80 bg-[#161F2C] shadow-operator flex flex-col lg:flex-row lg:items-center justify-between gap-6">
         <div className="space-y-2">
-          <div className="flex items-center gap-3">
-            <h1 className="text-xl font-bold font-mono tracking-tight text-relay-text flex items-center gap-2">
-              <Building2 className="w-5 h-5 text-relay-accent" />
-              {company.name}
-            </h1>
-            <StatusBadge status={research?.status || 'PENDING'} size="sm" />
-          </div>
-
-          <div className="flex flex-wrap items-center gap-4 text-xs font-mono text-relay-muted">
-            <a
-              href={company.website?.startsWith('http') ? company.website : `https://${company.normalizedDomain}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-1 text-relay-accent hover:underline"
-            >
-              <Globe className="w-3.5 h-3.5" />
-              <span>{company.normalizedDomain}</span>
-              <ExternalLink className="w-2.5 h-2.5" />
-            </a>
-
-            {research?.industry && (
-              <span className="px-2 py-0.5 rounded border border-relay-border bg-relay-bg text-relay-text">
-                {research.industry}
-              </span>
-            )}
-
-            {research?.companySize && (
-              <span className="flex items-center gap-1 text-relay-subtle">
-                <Users className="w-3.5 h-3.5" />
-                <span>{research.companySize}</span>
-              </span>
-            )}
+          <div className="flex items-center gap-3.5">
+            <div className="p-2.5 rounded-xl bg-[#1E293B] border border-slate-700/60 text-[#C8F25C]">
+              <Building2 className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2.5">
+                <h1 className="text-xl font-bold text-[#F8FAFC] tracking-tight font-sans">
+                  {company.name}
+                </h1>
+                <StatusBadge status={research?.status || 'RESEARCHED'} size="sm" />
+              </div>
+              <div className="flex items-center gap-3 text-xs font-mono text-[#94A3B8] pt-1">
+                <a
+                  href={
+                    company.website?.startsWith('http')
+                      ? company.website
+                      : `https://${company.normalizedDomain}`
+                  }
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1 text-[#C8F25C] hover:underline"
+                >
+                  <Globe className="w-3 h-3" />
+                  <span>{company.normalizedDomain}</span>
+                  <ExternalLink className="w-2.5 h-2.5" />
+                </a>
+                <span>•</span>
+                <span>ID: {company.id.slice(0, 8)}</span>
+                {research?.industry && (
+                  <>
+                    <span>•</span>
+                    <span className="text-[#F8FAFC]">{research.industry}</span>
+                  </>
+                )}
+              </div>
+            </div>
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
+        {/* Primary Operator Actions & Prominent "Create Outreach" CTA */}
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-3 px-3.5 py-2 rounded-lg bg-[#0D1117] border border-slate-800 font-mono">
+            <span className="text-[11px] text-[#64748B] uppercase tracking-wider">Depth Score:</span>
+            <ScoreGauge score={qualityScore} size="sm" />
+          </div>
+
           <button
             onClick={() => refreshMutation.mutate()}
             disabled={refreshMutation.isPending}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-mono rounded border border-relay-border bg-relay-bg text-relay-text hover:bg-relay-card-hover disabled:opacity-50 transition-colors"
+            className="flex items-center gap-1.5 px-3 py-2 text-xs font-mono rounded-lg border border-slate-700/60 bg-[#1E293B] text-[#F8FAFC] hover:border-[#C8F25C]/50 hover:text-[#C8F25C] transition-colors disabled:opacity-50"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${refreshMutation.isPending ? 'animate-spin' : ''}`} />
-            <span>{research ? 'Refresh Research' : 'Trigger Research'}</span>
+            <RefreshCw
+              className={`w-3.5 h-3.5 ${refreshMutation.isPending ? 'animate-spin' : ''}`}
+            />
+            <span>Refresh Dossier</span>
           </button>
+
+          {/* Prominent High-Priority "Create Outreach" CTA */}
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            transition={{ type: 'spring', stiffness: 400, damping: 20 }}
+            onClick={handleOpenDraftWorkspace}
+            className="flex items-center gap-2 px-5 py-2.5 text-xs font-mono font-semibold rounded-lg border border-[#C8F25C] bg-[#C8F25C] text-black hover:bg-[#C8F25C]/90 shadow-[0_0_20px_rgba(200,242,92,0.35)] transition-all cursor-pointer"
+          >
+            <Sparkles className="w-4 h-4 fill-current" />
+            <span>Create Outreach</span>
+            <ArrowRight className="w-3.5 h-3.5 ml-0.5" />
+          </motion.button>
         </div>
       </div>
 
-      {!research && !isResearchLoading ? (
+      {!research && !isResearchLoading && !company.summary ? (
         <EmptyState
-          title="No research available yet"
-          description="Click 'Trigger Research' to crawl company web pages, analyze tech stacks, detect open engineering positions, and generate outreach hooks."
+          title="No intelligence brief available"
+          description="Click 'Refresh Dossier' to trigger autonomous crawling of target web surfaces, technology detection, and outreach thesis generation."
           action={{
-            label: "Trigger Deep Research",
+            label: "Dispatch Research Job",
             onClick: () => refreshMutation.mutate(),
           }}
         />
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Main 2 Cols: Overview, Outreach Hooks, Tech */}
-          <div className="lg:col-span-2 space-y-6">
-            {/* Summary Card */}
-            <div className="p-6 rounded-lg border border-relay-border bg-relay-card shadow-operator space-y-3">
-              <span className="text-[11px] font-mono uppercase tracking-wider text-relay-muted font-semibold">
-                Company Summary & Market Focus
-              </span>
-              <p className="text-xs text-relay-text leading-relaxed font-sans">
-                {research?.summary || company.summary || 'No summary synthesized yet.'}
-              </p>
+        /* Aceternity Bento Grid for Company Intelligence */
+        <BentoGrid className="pb-8">
+          {/* Bento Card 1: Executive Intelligence Brief (md:col-span-2) */}
+          <BentoGridItem
+            className="md:col-span-2"
+            title="Executive Intelligence Brief"
+            description={
+              research?.summary ||
+              company.summary ||
+              'Autonomous crawler is synthesizing target market positioning and core value proposition.'
+            }
+            icon={<Shield className="w-4 h-4" />}
+          >
+            <div className="pt-3 flex flex-wrap items-center gap-3 text-[11px] font-mono text-[#94A3B8] border-t border-slate-800">
+              <div className="flex items-center gap-1.5">
+                <span className="text-[#64748B]">Industry:</span>
+                <span className="text-[#F8FAFC]">{research?.industry || company.industry || 'Software / Technology'}</span>
+              </div>
+              <span>•</span>
+              <div className="flex items-center gap-1.5">
+                <span className="text-[#64748B]">Stage:</span>
+                <span className="text-[#F8FAFC]">{company.companyStage || 'Growth Scaleup'}</span>
+              </div>
+              <span>•</span>
+              <div className="flex items-center gap-1.5">
+                <span className="text-[#64748B]">Target Domain:</span>
+                <span className="text-[#C8F25C]">{company.normalizedDomain}</span>
+              </div>
             </div>
+          </BentoGridItem>
 
-            {/* Outreach Hooks Card */}
-            <div className="p-6 rounded-lg border border-relay-border bg-relay-card shadow-operator space-y-4">
-              <div className="flex items-center justify-between pb-2 border-b border-relay-border">
-                <span className="text-[11px] font-mono uppercase tracking-wider text-relay-muted font-semibold flex items-center gap-1.5">
-                  <Target className="w-4 h-4 text-amber-400" />
-                  Synthesized Outreach Hooks
-                </span>
-                <span className="text-[10px] font-mono text-relay-subtle">
-                  Used by Outreach V7 Engine
+          {/* Bento Card 2: Growth & Hiring Signals (md:col-span-1) */}
+          <BentoGridItem
+            className="md:col-span-1"
+            title="Growth & Open Roles Used"
+            description="Autonomous telemetry derived from public job boards and career gateways."
+            icon={<Zap className="w-4 h-4 text-amber-400" />}
+          >
+            <div className="space-y-2.5 text-xs font-mono pt-1">
+              <div className="flex items-center justify-between p-2.5 rounded-lg bg-[#0D1117] border border-slate-800">
+                <span className="text-[#94A3B8]">Hiring Velocity:</span>
+                <span className="text-[#C8F25C] font-semibold flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#C8F25C] animate-pulse" />
+                  Active Roles
                 </span>
               </div>
 
-              <div className="space-y-3 text-xs">
-                {hooks?.whyThisCompany ? (
-                  <div>
-                    <span className="text-[10px] font-mono text-relay-subtle uppercase block mb-1">
-                      Why This Company
-                    </span>
-                    <div className="p-3 rounded bg-relay-bg border border-relay-border text-relay-text leading-relaxed">
-                      {hooks.whyThisCompany}
-                    </div>
+              {company.hiringSignals && company.hiringSignals.length > 0 ? (
+                <div className="p-2.5 rounded-lg bg-[#0D1117] border border-slate-800 space-y-1">
+                  <span className="text-[10px] text-[#64748B] uppercase tracking-wider block">
+                    Detected Open Roles:
+                  </span>
+                  <div className="flex flex-wrap gap-1">
+                    {company.hiringSignals.slice(0, 2).map((role: string, i: number) => (
+                      <span key={i} className="text-[10px] px-1.5 py-0.5 rounded bg-[#161F2C] border border-slate-700/60 text-[#F8FAFC]">
+                        {role}
+                      </span>
+                    ))}
                   </div>
-                ) : null}
-
-                {hooks?.whyNow ? (
-                  <div>
-                    <span className="text-[10px] font-mono text-relay-subtle uppercase block mb-1">
-                      Why Now (Growth Signals & Timing)
-                    </span>
-                    <div className="p-3 rounded bg-relay-bg border border-relay-border text-relay-text leading-relaxed">
-                      {hooks.whyNow}
-                    </div>
-                  </div>
-                ) : null}
-
-                {hooks?.keyProblemsSolving && hooks.keyProblemsSolving.length > 0 ? (
-                  <div>
-                    <span className="text-[10px] font-mono text-relay-subtle uppercase block mb-1">
-                      Key Problems Being Solved
-                    </span>
-                    <ul className="list-disc list-inside space-y-1 p-3 rounded bg-relay-bg border border-relay-border text-relay-muted">
-                      {hooks.keyProblemsSolving.map((p, i) => (
-                        <li key={i} className="text-relay-text">{p}</li>
-                      ))}
-                    </ul>
-                  </div>
-                ) : null}
-
-                {hooks?.engineeringCultureSignals && hooks.engineeringCultureSignals.length > 0 ? (
-                  <div>
-                    <span className="text-[10px] font-mono text-relay-subtle uppercase block mb-1">
-                      Engineering Culture Signals
-                    </span>
-                    <div className="flex flex-wrap gap-1.5">
-                      {hooks.engineeringCultureSignals.map((signal, i) => (
-                        <span
-                          key={i}
-                          className="text-[10px] font-mono px-2 py-0.5 rounded bg-relay-bg border border-relay-border text-relay-text"
-                        >
-                          {signal}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                ) : null}
-
-                {!hooks?.whyThisCompany && !hooks?.whyNow && (
-                  <div className="text-xs text-relay-subtle italic">
-                    No explicit outreach hooks generated yet.
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Collapsible Raw Markdown Card */}
-            <div className="rounded-lg border border-relay-border bg-relay-card shadow-operator overflow-hidden">
-              <button
-                onClick={() => setShowRawMarkdown(!showRawMarkdown)}
-                className="w-full p-4 flex items-center justify-between text-xs font-mono font-medium text-relay-muted hover:text-relay-text hover:bg-relay-card-hover transition-colors"
-              >
-                <div className="flex items-center gap-2">
-                  <FileCode className="w-4 h-4 text-relay-accent" />
-                  <span>Inspect Raw Scraped Markdown</span>
                 </div>
-                {showRawMarkdown ? (
-                  <ChevronDown className="w-4 h-4" />
-                ) : (
-                  <ChevronRight className="w-4 h-4" />
-                )}
-              </button>
+              ) : null}
 
-              {showRawMarkdown && (
-                <div className="p-4 border-t border-relay-border bg-relay-bg font-mono text-[11px] max-h-96 overflow-y-auto leading-relaxed text-relay-muted whitespace-pre-wrap">
-                  {rawMarkdownData?.rawMarkdown || research?.rawMarkdown || (
-                    <span className="italic text-relay-subtle">No raw crawled markdown stored for this company.</span>
-                  )}
+              {research?.careersPageUrl && (
+                <a
+                  href={research.careersPageUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-between p-2 rounded-lg bg-[#0D1117] border border-slate-800 text-[#C8F25C] hover:underline"
+                >
+                  <span>Careers Portal</span>
+                  <ExternalLink className="w-3 h-3" />
+                </a>
+              )}
+            </div>
+          </BentoGridItem>
+
+          {/* Bento Card 3: Synthesized Outreach Thesis (md:col-span-2) */}
+          <BentoGridItem
+            className="md:col-span-2"
+            title="Synthesized Outreach Thesis (Outreach V7)"
+            description="Grounding vectors extracted for candidate positioning and personalization."
+            icon={<Target className="w-4 h-4 text-[#C8F25C]" />}
+          >
+            <div className="space-y-3 pt-2">
+              {hooks?.whyThisCompany && (
+                <div className="space-y-1">
+                  <span className="text-[10px] font-mono text-[#64748B] uppercase tracking-wider block">
+                    1. Why This Company
+                  </span>
+                  <div className="p-3 rounded-lg bg-[#0D1117] border border-slate-800 text-xs text-[#F8FAFC] leading-relaxed">
+                    {hooks.whyThisCompany}
+                  </div>
+                </div>
+              )}
+
+              {hooks?.whyNow && (
+                <div className="space-y-1">
+                  <span className="text-[10px] font-mono text-[#64748B] uppercase tracking-wider block">
+                    2. Why Now (Inflection Point / Timing)
+                  </span>
+                  <div className="p-3 rounded-lg bg-[#0D1117] border border-slate-800 text-xs text-[#F8FAFC] leading-relaxed">
+                    {hooks.whyNow}
+                  </div>
+                </div>
+              )}
+
+              {hooks?.keyProblemsSolving && hooks.keyProblemsSolving.length > 0 && (
+                <div className="space-y-1">
+                  <span className="text-[10px] font-mono text-[#64748B] uppercase tracking-wider block">
+                    3. Core Problems Solved
+                  </span>
+                  <ul className="list-disc list-inside space-y-1 p-3 rounded-lg bg-[#0D1117] border border-slate-800 text-xs text-[#94A3B8]">
+                    {hooks.keyProblemsSolving.map((p, i) => (
+                      <li key={i} className="text-[#F8FAFC]">
+                        {p}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {!hooks?.whyThisCompany && !hooks?.whyNow && (
+                <div className="p-3 rounded-lg bg-[#0D1117] border border-slate-800 text-xs text-[#64748B] italic">
+                  Outreach hooks are generated automatically when research crawler completes.
                 </div>
               )}
             </div>
-          </div>
+          </BentoGridItem>
 
-          {/* Right Sidebar: Tech Stack, Signals, Quality */}
-          <div className="space-y-6">
-            {/* Research Quality Gauge Card */}
-            <div className="p-5 rounded-lg border border-relay-border bg-relay-card shadow-operator space-y-3">
-              <span className="text-[10px] font-mono uppercase tracking-wider text-relay-muted font-semibold">
-                Research Depth Score
-              </span>
+          {/* Bento Card 4: Technology Topography (md:col-span-1) */}
+          <BentoGridItem
+            className="md:col-span-1"
+            title="Technology Topography"
+            description="Detected tech stack signatures and frameworks from web surfaces."
+            icon={<Cpu className="w-4 h-4 text-[#C8F25C]" />}
+          >
+            {((research?.techStack && research.techStack.length > 0) || (company.techSignals && company.techSignals.length > 0)) ? (
+              <div className="flex flex-wrap gap-1.5 pt-2">
+                {(research?.techStack || company.techSignals || []).map((tech: string, i: number) => (
+                  <span
+                    key={i}
+                    className="text-[11px] font-mono px-2 py-1 rounded bg-[#0D1117] border border-slate-800 text-[#F8FAFC] hover:border-[#C8F25C]/50 hover:text-[#C8F25C] transition-colors"
+                  >
+                    {tech}
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <div className="p-3 rounded-lg bg-[#0D1117] border border-slate-800 text-xs text-[#64748B] italic">
+                No technical signals discovered yet.
+              </div>
+            )}
+          </BentoGridItem>
+
+          {/* Bento Card 5: Terminal: Scraped Intelligence Stream (md:col-span-3) */}
+          <BentoGridItem
+            className="md:col-span-3"
+            title="Terminal: Scraped Intelligence Stream"
+            description="Raw markdown crawler stream from target public web surfaces."
+            icon={<Terminal className="w-4 h-4 text-[#C8F25C]" />}
+          >
+            <div className="space-y-3 pt-2">
               <div className="flex items-center justify-between">
-                <span className="text-xs text-relay-text font-medium">Confidence & Coverage</span>
-                <ScoreGauge score={research?.researchQualityScore ?? 0} maxScore={100} size="md" />
-              </div>
-              {research?.qualityReason && (
-                <p className="text-[11px] font-mono text-relay-subtle pt-2 border-t border-relay-border/60">
-                  {research.qualityReason}
-                </p>
-              )}
-            </div>
-
-            {/* Tech Stack */}
-            <div className="p-5 rounded-lg border border-relay-border bg-relay-card shadow-operator space-y-3">
-              <span className="text-[10px] font-mono uppercase tracking-wider text-relay-muted font-semibold flex items-center gap-1.5">
-                <Cpu className="w-3.5 h-3.5 text-relay-accent" />
-                Detected Tech Stack
-              </span>
-
-              {research?.techStack && research.techStack.length > 0 ? (
-                <div className="flex flex-wrap gap-1.5">
-                  {research.techStack.map((tech, i) => (
-                    <span
-                      key={i}
-                      className="text-[10px] font-mono px-2 py-0.5 rounded bg-relay-bg border border-relay-border text-relay-text"
-                    >
-                      {tech}
-                    </span>
-                  ))}
-                </div>
-              ) : (
-                <span className="text-xs text-relay-subtle italic">No tech stack signals detected.</span>
-              )}
-            </div>
-
-            {/* Hiring Signals */}
-            <div className="p-5 rounded-lg border border-relay-border bg-relay-card shadow-operator space-y-3">
-              <span className="text-[10px] font-mono uppercase tracking-wider text-relay-muted font-semibold">
-                Hiring Signals & Careers
-              </span>
-
-              <div className="space-y-2 text-xs">
-                <div className="flex items-center justify-between">
-                  <span className="text-relay-subtle font-mono text-[11px]">Hiring Active:</span>
-                  {research?.isHiring ? (
-                    <span className="text-relay-accent font-medium flex items-center gap-1">
-                      <CheckCircle2 className="w-3 h-3" /> Yes
-                    </span>
+                <button
+                  onClick={() => setShowTerminal(!showTerminal)}
+                  className="flex items-center gap-2 text-xs font-mono text-[#94A3B8] hover:text-[#F8FAFC] transition-colors"
+                >
+                  {showTerminal ? (
+                    <ChevronDown className="w-4 h-4 text-[#C8F25C]" />
                   ) : (
-                    <span className="text-relay-subtle">No signals</span>
+                    <ChevronRight className="w-4 h-4 text-[#C8F25C]" />
                   )}
-                </div>
+                  <span>{showTerminal ? 'Collapse Scraped Stream' : 'Expand Scraped Stream'}</span>
+                </button>
 
-                {research?.atsProvider && (
-                  <div className="flex items-center justify-between">
-                    <span className="text-relay-subtle font-mono text-[11px]">ATS Provider:</span>
-                    <span className="font-mono text-relay-text">{research.atsProvider}</span>
-                  </div>
-                )}
-
-                {research?.careersPageUrl && (
-                  <div className="pt-2 border-t border-relay-border/60">
-                    <a
-                      href={research.careersPageUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-relay-accent text-[11px] font-mono hover:underline flex items-center gap-1"
-                    >
-                      <span>Careers Portal</span>
-                      <ExternalLink className="w-2.5 h-2.5" />
-                    </a>
-                  </div>
+                {showTerminal && rawStreamContent && (
+                  <button
+                    onClick={handleCopyTerminal}
+                    className="flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-mono rounded-md bg-[#0D1117] border border-slate-800 text-[#94A3B8] hover:text-[#F8FAFC] transition-colors"
+                  >
+                    {copiedTerminal ? (
+                      <>
+                        <Check className="w-3 h-3 text-[#C8F25C]" />
+                        <span className="text-[#C8F25C]">Copied</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3 h-3" />
+                        <span>Copy Raw Markdown</span>
+                      </>
+                    )}
+                  </button>
                 )}
               </div>
+
+              <AnimatePresence>
+                {showTerminal && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="overflow-hidden"
+                  >
+                    <div className="p-4 rounded-lg border border-slate-800 bg-[#0D1117] font-mono text-[11px] max-h-96 overflow-y-auto leading-relaxed text-[#94A3B8] whitespace-pre-wrap select-text shadow-inner">
+                      {rawStreamContent || (
+                        <span className="italic text-[#64748B]">
+                          No raw terminal stream available for this target company.
+                        </span>
+                      )}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
-          </div>
-        </div>
+          </BentoGridItem>
+        </BentoGrid>
       )}
     </div>
   );

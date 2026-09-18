@@ -238,6 +238,12 @@ export class DraftQualityService {
     "i admire",
     "i've been following",
     "i have been following",
+    "is focused on",
+    "are focused on",
+    "specializes in",
+    "specializing in",
+    "operates in",
+    "works across",
     "i appreciate",
     "i love what you're building",
     "i wanted to introduce myself",
@@ -457,8 +463,8 @@ export class DraftQualityService {
       }
     }
     const wordCount = body.split(/\s+/).filter(Boolean).length;
-    if (wordCount > 130) {
-      spamRiskScore += 25;
+    if (wordCount > 100) {
+      spamRiskScore += 35;
       flags.push('EXCESSIVE_WORD_COUNT');
     } else if (wordCount < 40) {
       spamRiskScore += 25;

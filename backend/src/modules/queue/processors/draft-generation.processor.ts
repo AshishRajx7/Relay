@@ -183,6 +183,7 @@ export class DraftGenerationProcessor extends WorkerHost {
         prospect,
         prospect.companyProfile,
         candidate,
+        v3Match,
         multiResumeMatch,
       );
 

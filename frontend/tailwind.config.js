@@ -9,40 +9,32 @@ export default {
     extend: {
       colors: {
         relay: {
-          bg: '#060B14',
-          card: '#0B1220',
-          'card-hover': '#0F182B',
-          border: '#1B2638',
-          'border-light': '#243249',
+          bg: '#0D1117',            // Slate-based Base
+          card: '#161F2C',          // Slate-based Surface
+          'card-hover': '#1E293B',  // Slate-based Elevated
+          elevated: '#1E293B',
+          border: 'rgba(148, 163, 184, 0.12)',
+          'border-light': 'rgba(148, 163, 184, 0.22)',
           accent: '#C8F25C',
-          'accent-hover': '#B6DF4D',
+          'accent-hover': '#B8E24C',
           'accent-muted': 'rgba(200, 242, 92, 0.12)',
+          text: '#F8FAFC',          // Slate-50
+          muted: '#94A3B8',         // Slate-400
+          subtle: '#64748B',        // Slate-500
           success: '#A3E635',
-          'success-muted': 'rgba(163, 230, 53, 0.12)',
           warning: '#FBBF24',
-          'warning-muted': 'rgba(251, 191, 36, 0.12)',
           danger: '#EF4444',
-          'danger-muted': 'rgba(239, 68, 68, 0.12)',
-          text: '#FFFFFF',
-          muted: '#A8B3C7',
-          subtle: '#64748B',
-        },
+        }
       },
       fontFamily: {
-        mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'Monaco', 'Consolas', 'monospace'],
-        sans: [
-          'Inter',
-          '-apple-system',
-          'BlinkMacSystemFont',
-          'Segoe UI',
-          'Roboto',
-          'sans-serif',
-        ],
+        sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
+        mono: ['JetBrains Mono', 'Menlo', 'Monaco', 'Courier New', 'monospace'],
       },
       boxShadow: {
-        'operator': '0 1px 3px 0 rgba(0, 0, 0, 0.4), 0 1px 2px -1px rgba(0, 0, 0, 0.4)',
-        'operator-lg': '0 4px 12px 0 rgba(0, 0, 0, 0.5), 0 2px 4px -2px rgba(0, 0, 0, 0.5)',
-      },
+        'operator': '0 4px 20px -2px rgba(0, 0, 0, 0.4), 0 2px 6px -1px rgba(0, 0, 0, 0.2)',
+        'operator-lg': '0 12px 32px -4px rgba(0, 0, 0, 0.5), 0 4px 12px -2px rgba(0, 0, 0, 0.3)',
+        'dock': '0 10px 30px -5px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(148, 163, 184, 0.15)',
+      }
     },
   },
   plugins: [],

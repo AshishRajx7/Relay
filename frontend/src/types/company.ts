@@ -1,4 +1,4 @@
-export type ResearchStatus = 'PENDING' | 'CRAWLING' | 'ANALYZING' | 'COMPLETED' | 'FAILED';
+export type ResearchStatus = 'PENDING' | 'CRAWLING' | 'ANALYZING' | 'COMPLETED' | 'RESEARCH_RETRY_REQUIRED' | 'FAILED';
 export type CompanyPersona = 'SAAS' | 'AGENCY' | 'ENTERPRISE' | 'EARLY_STAGE' | 'DEVELOPER_TOOLS' | 'OTHER';
 
 export interface CompanyResearchSummaryDto {

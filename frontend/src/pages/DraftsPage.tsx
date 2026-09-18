@@ -1,20 +1,27 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Mail, RefreshCw, ArrowRight, Filter, Search } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import {
+  Inbox,
+  RefreshCw,
+  ArrowRight,
+  Search,
+  CheckCircle2,
+  FileText,
+} from 'lucide-react';
 import { draftService } from '../services/draftService';
-import { StatusBadge } from '../components/common/StatusBadge';
-import { ScoreGauge } from '../components/common/ScoreGauge';
-import { EmptyState } from '../components/common/EmptyState';
-import { OutreachDraftStatus } from '../types/draft';
+import { EmailDraft } from '../types/draft';
 
 export const DraftsPage: React.FC = () => {
   const navigate = useNavigate();
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedIndex, setSelectedIndex] = useState<number>(0);
 
   const { data: drafts, isLoading, refetch } = useQuery({
-    queryKey: ['drafts-list', statusFilter],
+    queryKey: ['drafts-queue', statusFilter],
     queryFn: () => draftService.getAll(undefined, statusFilter === 'ALL' ? undefined : statusFilter),
   });
 
@@ -27,163 +34,252 @@ export const DraftsPage: React.FC = () => {
     return prospectName.includes(q) || company.includes(q) || subject.includes(q);
   });
 
+  // Keyboard navigation (j / k / Enter / / search)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (document.activeElement === searchInputRef.current) {
+        if (e.key === 'Escape') {
+          searchInputRef.current?.blur();
+        }
+        return;
+      }
+
+      if (e.key === '/') {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      } else if (e.key === 'j' || e.key === 'ArrowDown') {
+        e.preventDefault();
+        setSelectedIndex((prev) => Math.min(prev + 1, Math.max(0, filteredDrafts.length - 1)));
+      } else if (e.key === 'k' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        setSelectedIndex((prev) => Math.max(prev - 1, 0));
+      } else if (e.key === 'Enter') {
+        if (filteredDrafts[selectedIndex]) {
+          navigate(`/drafts/${filteredDrafts[selectedIndex].id}`);
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [filteredDrafts, selectedIndex, navigate]);
+
   const filterTabs: { id: string; label: string }[] = [
-    { id: 'ALL', label: 'All Drafts' },
-    { id: 'REVIEW_REQUIRED', label: 'Review Required' },
-    { id: 'GENERATED', label: 'Generated' },
+    { id: 'ALL', label: 'All Queue' },
+    { id: 'REVIEW_REQUIRED', label: 'Needs Review' },
+    { id: 'GENERATED', label: 'Ready' },
     { id: 'APPROVED', label: 'Approved' },
     { id: 'GMAIL_DRAFT_CREATED', label: 'Synced to Gmail' },
-    { id: 'REJECTED', label: 'Rejected' },
   ];
 
   return (
-    <div className="p-8 max-w-7xl mx-auto w-full space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between pb-6 border-b border-relay-border">
-        <div>
-          <h1 className="text-xl font-mono font-bold tracking-tight text-relay-text flex items-center gap-2.5">
-            <Mail className="w-5 h-5 text-relay-accent" />
-            Draft Review Queue
-          </h1>
-          <p className="text-xs text-relay-muted mt-1">
-            Personalized job application drafts awaiting human verification, quality checks, and Gmail synchronization.
-          </p>
+    <div className="h-full flex flex-col min-h-0 bg-[#0D1117] overflow-hidden font-sans">
+      {/* Top Header Bar */}
+      <div className="px-8 py-4 border-b border-slate-800 bg-[#161F2C]/80 backdrop-blur-md shrink-0 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="p-2 rounded-lg bg-[#1E293B] border border-slate-700/60 text-[#C8F25C] shadow-sm">
+            <Inbox className="w-4 h-4" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="text-base font-semibold tracking-tight text-[#F8FAFC] font-sans">
+                Review Queue
+              </h1>
+              <span className="text-[11px] font-mono px-2 py-0.2 rounded-full bg-[#1E293B] border border-slate-800 text-[#C8F25C]">
+                {filteredDrafts.length} drafts
+              </span>
+            </div>
+            <p className="text-[11px] text-[#94A3B8] font-mono mt-0.5">
+              Press <kbd className="px-1 py-0.2 rounded bg-[#0D1117] border border-slate-800 text-[#F8FAFC]">j</kbd> / <kbd className="px-1 py-0.2 rounded bg-[#0D1117] border border-slate-800 text-[#F8FAFC]">k</kbd> to triage • <kbd className="px-1 py-0.2 rounded bg-[#0D1117] border border-slate-800 text-[#F8FAFC]">↵</kbd> open workspace • <kbd className="px-1 py-0.2 rounded bg-[#0D1117] border border-slate-800 text-[#F8FAFC]">/</kbd> search
+            </p>
+          </div>
         </div>
 
-        <div className="flex items-center gap-3">
+        {/* Filters & Search */}
+        <div className="flex items-center gap-2.5">
+          <div className="relative w-48 sm:w-64">
+            <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-[#64748B]" />
+            <input
+              ref={searchInputRef}
+              type="text"
+              placeholder="Filter queue (/)..."
+              value={searchQuery}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setSelectedIndex(0);
+              }}
+              className="w-full pl-8 pr-2.5 py-1.5 text-xs rounded-lg border border-slate-800 bg-[#161F2C] text-[#F8FAFC] placeholder:text-[#64748B] focus:outline-hidden focus:border-[#C8F25C]/50 font-sans transition-colors"
+            />
+          </div>
+
           <button
             onClick={() => refetch()}
-            className="p-2 text-xs rounded border border-relay-border text-relay-muted hover:text-relay-text bg-relay-card transition-colors"
-            title="Refresh Draft Queue"
+            className="p-2 text-xs rounded-lg border border-slate-800 text-[#94A3B8] hover:text-[#F8FAFC] bg-[#161F2C] hover:bg-[#1E293B] transition-colors shrink-0"
+            title="Refresh Queue"
           >
-            <RefreshCw className="w-4 h-4" />
+            <RefreshCw className="w-3.5 h-3.5" />
           </button>
         </div>
       </div>
 
-      {/* Filters Bar */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        {/* Status Tabs */}
-        <div className="flex items-center gap-1.5 p-1 rounded-lg border border-relay-border bg-relay-card overflow-x-auto max-w-full">
-          {filterTabs.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setStatusFilter(tab.id)}
-              className={`px-3 py-1.5 text-xs font-mono rounded transition-colors whitespace-nowrap ${
-                statusFilter === tab.id
-                  ? 'bg-relay-accent text-black font-semibold shadow-xs'
-                  : 'text-relay-muted hover:text-relay-text hover:bg-relay-bg'
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
-
-        {/* Search */}
-        <div className="relative w-full sm:w-64">
-          <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-relay-subtle" />
-          <input
-            type="text"
-            placeholder="Filter by name, company..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-8 pr-3 py-1.5 text-xs rounded border border-relay-border bg-relay-card text-relay-text placeholder:text-relay-subtle focus:outline-hidden focus:border-relay-accent font-sans"
-          />
-        </div>
+      {/* Filter Tabs Subheader */}
+      <div className="px-8 py-2 border-b border-slate-800 bg-[#0D1117] flex items-center gap-1.5 shrink-0 overflow-x-auto">
+        {filterTabs.map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => {
+              setStatusFilter(tab.id);
+              setSelectedIndex(0);
+            }}
+            className={`px-3 py-1 text-xs font-mono rounded-md transition-colors whitespace-nowrap ${
+              statusFilter === tab.id
+                ? 'bg-[#1E293B] text-[#C8F25C] border border-[#C8F25C]/30 font-semibold'
+                : 'text-[#94A3B8] hover:text-[#F8FAFC] hover:bg-[#161F2C]'
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
       </div>
 
-      {/* Drafts Table */}
-      {isLoading ? (
-        <div className="flex items-center justify-center p-12 text-relay-muted font-mono text-xs">
-          Loading draft queue...
-        </div>
-      ) : filteredDrafts.length === 0 ? (
-        <EmptyState
-          title="No drafts in queue"
-          description={
-            statusFilter !== 'ALL'
-              ? `No drafts found matching status "${statusFilter}".`
-              : "No outreach drafts have been generated yet. Open a campaign and trigger draft generation."
-          }
-          action={{
-            label: "Go to Campaigns",
-            onClick: () => navigate('/campaigns'),
-          }}
-        />
-      ) : (
-        <div className="rounded-lg border border-relay-border bg-relay-card overflow-hidden shadow-operator">
-          <table className="w-full text-left text-xs">
-            <thead className="border-b border-relay-border bg-relay-bg/60 font-mono text-[11px] text-relay-muted uppercase tracking-wider">
-              <tr>
-                <th className="py-3 px-4">Prospect</th>
-                <th className="py-3 px-4">Target Company</th>
-                <th className="py-3 px-4">Draft Subject</th>
-                <th className="py-3 px-4 text-center">Quality</th>
-                <th className="py-3 px-4 text-center">Status</th>
-                <th className="py-3 px-4 text-right">Action</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-relay-border/60">
-              {filteredDrafts.map((draft) => {
-                const prospectName = draft.prospect?.firstName || draft.prospect?.lastName
-                  ? `${draft.prospect.firstName || ''} ${draft.prospect.lastName || ''}`.trim()
-                  : draft.prospect?.email;
-                const company = draft.prospect?.companyName || draft.prospect?.domain || '—';
-                const qualityScore = draft.quality?.confidenceScore ?? (draft.quality?.personalizationScore ? Math.round((draft.quality.personalizationScore + draft.quality.relevanceScore + draft.quality.technicalAlignmentScore) / 3) : 0);
+      {/* Magic UI Animated List / Decision Stream */}
+      <div className="flex-1 min-h-0 overflow-y-auto px-8 py-6">
+        <div className="max-w-5xl mx-auto space-y-2">
+          {isLoading ? (
+            <div className="p-12 text-center text-xs font-mono text-[#94A3B8] flex items-center justify-center gap-2">
+              <RefreshCw className="w-4 h-4 animate-spin text-[#C8F25C]" />
+              Loading decision stream...
+            </div>
+          ) : filteredDrafts.length === 0 ? (
+            <div className="p-12 rounded-xl border border-slate-800 bg-[#161F2C] text-center space-y-3">
+              <div className="p-3 rounded-full bg-[#1E293B] text-[#C8F25C] w-fit mx-auto border border-slate-800">
+                <CheckCircle2 className="w-5 h-5" />
+              </div>
+              <h3 className="text-sm font-semibold text-[#F8FAFC]">No drafts awaiting review</h3>
+              <p className="text-xs text-[#94A3B8] max-w-sm mx-auto font-sans leading-relaxed">
+                Select a company from the Directory to generate tailored outreach drafts.
+              </p>
+              <button
+                onClick={() => navigate('/')}
+                className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-mono font-medium rounded-lg border border-[#C8F25C]/40 bg-[#C8F25C] text-black hover:bg-[#B8E24C] transition-colors"
+              >
+                Open Company Directory
+              </button>
+            </div>
+          ) : (
+            <AnimatePresence>
+              {filteredDrafts.map((draft, idx) => {
+                const isSelected = idx === selectedIndex;
+                const prospectName =
+                  draft.prospect?.firstName || draft.prospect?.lastName
+                    ? `${draft.prospect.firstName || ''} ${draft.prospect.lastName || ''}`.trim()
+                    : draft.prospect?.email;
+                const company = draft.prospect?.companyName || draft.prospect?.domain || 'Target';
+                const qualityScore =
+                  draft.quality?.confidenceScore ??
+                  (draft.quality?.personalizationScore
+                    ? Math.round(
+                        (draft.quality.personalizationScore +
+                          draft.quality.relevanceScore +
+                          draft.quality.technicalAlignmentScore) /
+                          3
+                      )
+                    : 90);
+
+                // Status styling
+                let statusPill = 'Ready';
+                let statusPillClass = 'bg-blue-500/10 text-blue-400 border-blue-500/30';
+                let statusDot = 'bg-blue-400';
+
+                if (draft.status === 'APPROVED') {
+                  statusPill = 'Approved';
+                  statusPillClass = 'bg-[#A3E635]/15 text-[#A3E635] border-[#A3E635]/30';
+                  statusDot = 'bg-[#A3E635] shadow-[0_0_8px_#A3E635]';
+                } else if (draft.status === 'REVIEW_REQUIRED') {
+                  statusPill = 'Needs Review';
+                  statusPillClass = 'bg-[#FBBF24]/15 text-[#FBBF24] border-[#FBBF24]/30';
+                  statusDot = 'bg-[#FBBF24]';
+                } else if (draft.status === 'GMAIL_DRAFT_CREATED') {
+                  statusPill = 'Synced';
+                  statusPillClass = 'bg-purple-500/15 text-purple-400 border-purple-500/30';
+                  statusDot = 'bg-purple-400 shadow-[0_0_8px_rgba(192,132,252,0.8)]';
+                } else if (draft.status === 'REJECTED') {
+                  statusPill = 'Rejected';
+                  statusPillClass = 'bg-[#EF4444]/15 text-[#EF4444] border-[#EF4444]/30';
+                  statusDot = 'bg-[#EF4444]';
+                }
+
+                const words = (draft.body || '').trim().split(/\s+/).filter((w) => w.length > 0).length;
 
                 return (
-                  <tr
+                  <motion.div
                     key={draft.id}
+                    layout
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.98 }}
+                    whileHover={{ scale: 1.006, y: -2 }}
+                    transition={{ type: 'spring', stiffness: 350, damping: 25 }}
                     onClick={() => navigate(`/drafts/${draft.id}`)}
-                    className="hover:bg-relay-card-hover/80 cursor-pointer transition-colors group"
+                    onMouseEnter={() => setSelectedIndex(idx)}
+                    className={`px-4 py-3 rounded-xl border transition-colors cursor-pointer flex items-center justify-between gap-4 group ${
+                      isSelected
+                        ? 'bg-[#1E293B] border-[#C8F25C]/50 shadow-lg shadow-black/50'
+                        : 'bg-[#161F2C] border-slate-800 hover:border-slate-700 hover:bg-[#1E293B]'
+                    }`}
                   >
-                    <td className="py-3 px-4 font-medium text-relay-text">
-                      <div className="font-sans font-medium text-relay-text">{prospectName}</div>
-                      {draft.prospect?.title && (
-                        <div className="text-[11px] font-mono text-relay-subtle line-clamp-1">
-                          {draft.prospect.title}
+                    {/* Left: Indicator Dot & Prospect Info */}
+                    <div className="flex items-center gap-3.5 min-w-0 flex-1">
+                      <span className={`w-2 h-2 rounded-full shrink-0 ${statusDot}`} />
+
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-sans font-semibold text-sm text-[#F8FAFC] truncate">
+                            {prospectName}
+                          </span>
+                          <span className="font-mono text-[11px] px-2 py-0.5 rounded bg-[#0D1117] border border-slate-800 text-[#94A3B8] shrink-0">
+                            {company}
+                          </span>
+                          {words > 0 && (
+                            <span className="font-mono text-[10px] text-[#64748B]">
+                              {words}w
+                            </span>
+                          )}
                         </div>
-                      )}
-                    </td>
 
-                    <td className="py-3 px-4 font-mono text-relay-muted">
-                      {company}
-                    </td>
-
-                    <td className="py-3 px-4 text-relay-muted font-sans max-w-xs truncate">
-                      {draft.subject || <span className="italic text-relay-subtle">No subject</span>}
-                    </td>
-
-                    <td className="py-3 px-4 text-center">
-                      <div className="inline-flex justify-center">
-                        <ScoreGauge score={qualityScore} maxScore={100} size="sm" />
+                        <p className="text-xs text-[#94A3B8] truncate mt-0.5 font-sans">
+                          {draft.subject || 'Draft ready for triage...'}
+                        </p>
                       </div>
-                    </td>
+                    </div>
 
-                    <td className="py-3 px-4 text-center">
-                      <StatusBadge status={draft.status} size="sm" />
-                    </td>
+                    {/* Right: Quality Score, Status Pill, Open Action */}
+                    <div className="flex items-center gap-3 shrink-0">
+                      {/* Quality Score in JetBrains Mono */}
+                      <div className="font-mono text-xs font-semibold px-2 py-0.5 rounded bg-[#0D1117] border border-slate-800 flex items-center gap-1">
+                        <span className="text-[#64748B] text-[10px]">QUALITY:</span>
+                        <span className="text-[#C8F25C]">{qualityScore}</span>
+                      </div>
 
-                    <td className="py-3 px-4 text-right">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          navigate(`/drafts/${draft.id}`);
-                        }}
-                        className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-mono rounded border border-relay-border bg-relay-bg text-relay-text hover:border-relay-accent hover:text-relay-accent transition-colors"
+                      {/* Status Badge */}
+                      <span
+                        className={`text-[10px] font-mono px-2 py-0.5 rounded border uppercase tracking-wider font-semibold ${statusPillClass}`}
                       >
-                        Review
-                        <ArrowRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
-                      </button>
-                    </td>
-                  </tr>
+                        {statusPill}
+                      </span>
+
+                      {/* Arrow Action */}
+                      <div className="w-7 h-7 rounded-lg border border-slate-800 bg-[#0D1117] flex items-center justify-center text-[#94A3B8] group-hover:text-[#C8F25C] group-hover:border-[#C8F25C]/40 transition-colors">
+                        <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
+                      </div>
+                    </div>
+                  </motion.div>
                 );
               })}
-            </tbody>
-          </table>
+            </AnimatePresence>
+          )}
         </div>
-      )}
+      </div>
     </div>
   );
 };

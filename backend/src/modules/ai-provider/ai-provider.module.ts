@@ -19,7 +19,7 @@ import { AIProviderController } from './ai-provider.controller';
           provider: configService.get<string>('ai.provider', 'nvidia'),
           apiKey: configService.get<string>('ai.apiKey', ''),
           baseUrl: configService.get<string>('ai.baseUrl', 'https://integrate.api.nvidia.com/v1'),
-          model: configService.get<string>('ai.model', 'deepseek-ai/deepseek-v4-flash-0731'),
+          model: configService.get<string>('ai.model', 'nvidia/nemotron-3-super-120b-a12b'),
           maxTokens: configService.get<number>('ai.maxTokens', 4096),
           temperature: configService.get<number>('ai.temperature', 0.3),
         });

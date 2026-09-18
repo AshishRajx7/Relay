@@ -150,8 +150,14 @@ export class CompanyProfileService {
 
     // 3. Upsert base CompanyProfile entity to obtain ID
     if (!profile) {
+      const fallbackName = normalizedDomain.split('.')[0];
+      const initialCompanyName =
+        preferredCompanyName?.trim() ||
+        (fallbackName ? fallbackName.charAt(0).toUpperCase() + fallbackName.slice(1) : normalizedDomain);
+
       profile = this.companyProfileRepository.create({
         domain: normalizedDomain,
+        companyName: initialCompanyName,
       });
       profile = await this.companyProfileRepository.save(profile);
     }
