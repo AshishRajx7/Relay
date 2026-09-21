@@ -10,6 +10,7 @@ import {
 } from 'typeorm';
 import { EmailDraft } from './email-draft.entity';
 import { RelationshipMatchEntity } from './relationship-match.entity';
+import { PersonalizationLevel } from '../../prospects/entities/prospect.entity';
 
 export type RecipientClassification = 'ENGINEERING_PEER' | 'ENGINEERING_MANAGER' | 'EXECUTIVE' | 'RECRUITER' | 'UNKNOWN';
 export type OutreachObjective = 'START_CONVERSATION' | 'EXPRESS_INTEREST';
@@ -27,6 +28,14 @@ export class OutreachStrategyEntity {
   @OneToOne(() => EmailDraft, (draft: EmailDraft) => draft.strategy, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'email_draft_id' })
   emailDraft: EmailDraft;
+
+  @Column({
+    name: 'personalization_level',
+    type: 'varchar',
+    length: 50,
+    nullable: true,
+  })
+  personalizationLevel: PersonalizationLevel | null;
 
   @Column({
     name: 'recipient_classification',

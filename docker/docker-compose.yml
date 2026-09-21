@@ -34,6 +34,17 @@ services:
       - TIMEOUT=30
     shm_size: "2gb"
 
+  adminer:
+    image: adminer:4
+    container_name: relay_adminer
+    restart: unless-stopped
+    depends_on:
+      - postgres
+    ports:
+      - "8080:8080"
+    environment:
+      ADMINER_DEFAULT_SERVER: postgres
+
 volumes:
   relay_pgdata:
   relay_redisdata:

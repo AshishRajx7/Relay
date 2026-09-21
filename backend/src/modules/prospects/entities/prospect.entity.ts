@@ -60,6 +60,14 @@ export enum NoOutreachAngleReason {
   INSUFFICIENT_CANDIDATE_EVIDENCE = 'INSUFFICIENT_CANDIDATE_EVIDENCE',
   LOW_RELATIONSHIP_STRENGTH = 'LOW_RELATIONSHIP_STRENGTH',
   NO_CREDIBLE_PERSONALIZATION = 'NO_CREDIBLE_PERSONALIZATION',
+  DRAFT_VALIDATION_FAILED = 'DRAFT_VALIDATION_FAILED',
+  DRAFT_VERIFICATION_FAILED = 'DRAFT_VERIFICATION_FAILED',
+}
+
+export enum PersonalizationLevel {
+  PERSONALIZED = 'PERSONALIZED',
+  PARTIALLY_PERSONALIZED = 'PARTIALLY_PERSONALIZED',
+  GENERAL_COLD_OUTREACH = 'GENERAL_COLD_OUTREACH',
 }
 
 export enum ProspectFailureType {
@@ -72,6 +80,14 @@ export enum ProspectFailureType {
 export class Prospect {
   @PrimaryGeneratedColumn('uuid')
   id: string;
+
+  @Column({
+    name: 'personalization_level',
+    type: 'varchar',
+    length: 50,
+    nullable: true,
+  })
+  personalizationLevel: PersonalizationLevel | null;
 
   @Column({ name: 'campaign_id', type: 'uuid' })
   @Index('IDX_prospects_campaign_id')

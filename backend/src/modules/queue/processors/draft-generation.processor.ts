@@ -159,20 +159,8 @@ export class DraftGenerationProcessor extends WorkerHost {
       prospect.campaignId,
     );
 
-    if (!v3Match.match) {
-      const refusalReason = v3Match.refusalReason || NoOutreachAngleReason.LOW_RELATIONSHIP_STRENGTH;
-      this.logger.warn(`Terminal refusal for prospect ${prospect.email} at ${prospect.companyProfile.companyName}: ${refusalReason}`);
-
-      prospect.draftStatus = ProspectDraftStatus.NO_SUFFICIENT_OUTREACH_ANGLE;
-      prospect.noAngleReason = refusalReason;
-      await this.prospectRepository.save(prospect);
-
-      return {
-        prospectId: prospect.id,
-        status: ProspectDraftStatus.NO_SUFFICIENT_OUTREACH_ANGLE,
-        refusalReason,
-      };
-    }
+    prospect.personalizationLevel = v3Match.personalizationLevel;
+    await this.prospectRepository.save(prospect);
 
     try {
       prospect.draftStatus = ProspectDraftStatus.GENERATING;
@@ -187,15 +175,77 @@ export class DraftGenerationProcessor extends WorkerHost {
         multiResumeMatch,
       );
 
-      // Save EmailDraft (Initial status: READY_FOR_APPROVAL)
+      const candidateName = candidate?.name?.trim() || v3Match.candidateFacts?.name || 'Software Engineer';
+      const githubUrl = candidate?.links?.github || '';
+      const linkedinUrl = candidate?.links?.linkedin || '';
+      const signatureParts = [`Best,`, candidateName];
+      if (githubUrl) signatureParts.push(`GitHub: ${githubUrl}`);
+      if (linkedinUrl) signatureParts.push(`LinkedIn: ${linkedinUrl}`);
+      const signature = signatureParts.join('\n');
+
+      let currentSubject = result.subject;
+      let currentBody = result.body;
+
+      // 2. Deterministic Validation Gate (<= 100 words, grammar, duplication, forbidden metadata)
+      if (result.structuredContext) {
+        let detCheck = this.emailGenerationService.validateDraftDeterministic(
+          currentSubject,
+          currentBody,
+          result.structuredContext,
+        );
+
+        if (!detCheck.valid) {
+          this.logger.warn(
+            `Draft for ${prospect.email} failed deterministic validation: ${detCheck.errors.join(', ')}. Attempting regeneration.`,
+          );
+          try {
+            const regenerated = await this.emailGenerationService.regenerateDraftWithFeedback(
+              result.structuredContext,
+              candidateName,
+              signature,
+              detCheck.errors,
+              currentBody,
+            );
+            currentSubject = regenerated.subject;
+            currentBody = regenerated.body;
+
+            detCheck = this.emailGenerationService.validateDraftDeterministic(
+              currentSubject,
+              currentBody,
+              result.structuredContext,
+            );
+          } catch (regenErr: any) {
+            this.logger.error(`Regeneration call failed: ${regenErr.message}`);
+          }
+
+          if (!detCheck.valid) {
+            this.logger.error(
+              `Draft for ${prospect.email} failed deterministic validation twice: ${detCheck.errors.join(', ')}`,
+            );
+            prospect.draftStatus = ProspectDraftStatus.FAILED;
+            prospect.failureType = ProspectFailureType.PERMANENT;
+            prospect.error = `Deterministic validation failed: ${detCheck.errors.join('; ')}`;
+            await this.prospectRepository.save(prospect);
+
+            return {
+              prospectId: prospect.id,
+              status: ProspectDraftStatus.FAILED,
+              error: prospect.error,
+            };
+          }
+        }
+      }
+
+      // 3. Save EmailDraft
       let draft = await this.emailDraftRepository.findOne({ where: { prospectId: prospect.id } });
       if (!draft) {
         draft = this.emailDraftRepository.create({ prospectId: prospect.id });
       }
 
-      draft.subject = result.subject;
-      draft.body = result.body;
+      draft.subject = currentSubject;
+      draft.body = currentBody;
       draft.status = OutreachDraftStatus.READY_FOR_APPROVAL;
+      draft.personalizationLevel = v3Match.personalizationLevel;
 
       const savedDraft = await this.emailDraftRepository.save(draft);
 
@@ -204,15 +254,17 @@ export class DraftGenerationProcessor extends WorkerHost {
       if (!strategy) {
         strategy = this.strategyRepository.create({
           emailDraftId: savedDraft.id,
+          personalizationLevel: v3Match.personalizationLevel,
           recipientClassification: prospect.contactType === ContactType.ENGINEERING ? 'ENGINEERING_PEER' : 'RECRUITER',
-          primaryMatchId: v3Match.match.id,
+          primaryMatchId: v3Match.match?.id || null,
           objective: 'START_CONVERSATION',
           tone: 'PEER',
           avoidTopics: 'Generic AI boilerplate, desperate asks, ungrounded claims',
           closingStrategy: 'Low-friction conversation starter with resume context',
         });
       } else {
-        strategy.primaryMatchId = v3Match.match.id;
+        strategy.personalizationLevel = v3Match.personalizationLevel;
+        strategy.primaryMatchId = v3Match.match?.id || null;
       }
       await this.strategyRepository.save(strategy);
 
@@ -221,13 +273,13 @@ export class DraftGenerationProcessor extends WorkerHost {
       if (!reasoning) {
         reasoning = this.draftReasoningRepository.create({ emailDraftId: savedDraft.id });
       }
-      reasoning.chosenProject = v3Match.candidateEvidence?.deliverableName || result.matchResult.chosenProject;
+      reasoning.chosenProject = v3Match.candidateEvidence?.deliverableName || result.matchResult.chosenProject || v3Match.candidateFacts?.keyDeliverables?.[0] || 'Backend Systems';
       reasoning.matchScore = v3Match.compositeScore || multiResumeMatch.matchScore;
       reasoning.whyCompany = result.whyCompany;
       reasoning.whyMe = result.whyMe;
       reasoning.whyNow = result.whyNow;
       reasoning.whyRelevant = result.whyRelevant;
-      reasoning.matchedTechnologies = result.matchResult.matchedTechnologies;
+      reasoning.matchedTechnologies = result.matchResult.matchedTechnologies?.length ? result.matchResult.matchedTechnologies : (v3Match.candidateFacts?.coreTechnologies?.slice(0, 4) || []);
       reasoning.rankedMatches = result.matchResult.rankedMatches;
       reasoning.confidenceLevel = result.confidenceLevel;
 
@@ -278,8 +330,8 @@ export class DraftGenerationProcessor extends WorkerHost {
         await this.variantRepository.save(variantEntity);
       }
 
-      // 2. Run Adversarial Claim Verification (Provenance check & cross-role bleed check)
-      const verification = await this.draftVerificationService.verifyDraft(
+      // 4. Run Claim Provenance & Semantic Verification Gate
+      let verification = await this.draftVerificationService.verifyDraft(
         savedDraft.id,
         savedDraft.body,
         candidate.id,
@@ -287,10 +339,62 @@ export class DraftGenerationProcessor extends WorkerHost {
         strategy,
       );
 
-      // 3. Human-Gated Workflow:
-      // If verification PASS -> READY_FOR_APPROVAL
-      // If campaign.autonomousGmailStaging === true -> auto-stage to Gmail
-      // Else -> wait for explicit human operator approval in UI!
+      if ((!verification.passed || verification.severity === 'REJECT') && result.structuredContext) {
+        this.logger.warn(
+          `Draft for ${prospect.email} failed verification audit: ${verification.verifierNotes}. Attempting regeneration.`,
+        );
+        try {
+          const regenerated = await this.emailGenerationService.regenerateDraftWithFeedback(
+            result.structuredContext,
+            candidateName,
+            signature,
+            [verification.verifierNotes || 'Failed verification audit'],
+            savedDraft.body,
+          );
+          const detRetry = this.emailGenerationService.validateDraftDeterministic(
+            regenerated.subject,
+            regenerated.body,
+            result.structuredContext,
+          );
+
+          if (detRetry.valid) {
+            savedDraft.subject = regenerated.subject;
+            savedDraft.body = regenerated.body;
+            await this.emailDraftRepository.save(savedDraft);
+
+            verification = await this.draftVerificationService.verifyDraft(
+              savedDraft.id,
+              savedDraft.body,
+              candidate.id,
+              prospect.companyProfile.id,
+              strategy,
+            );
+          }
+        } catch (regenErr: any) {
+          this.logger.error(`Regeneration call failed: ${regenErr.message}`);
+        }
+
+        if (!verification.passed || verification.severity === 'REJECT') {
+          this.logger.error(
+            `Draft for ${prospect.email} failed verification audit twice: ${verification.verifierNotes}`,
+          );
+          savedDraft.status = OutreachDraftStatus.REJECTED;
+          await this.emailDraftRepository.save(savedDraft);
+
+          prospect.draftStatus = ProspectDraftStatus.FAILED;
+          prospect.failureType = ProspectFailureType.PERMANENT;
+          prospect.error = `Draft verification failed: ${verification.verifierNotes}`;
+          await this.prospectRepository.save(prospect);
+
+          return {
+            prospectId: prospect.id,
+            status: ProspectDraftStatus.FAILED,
+            error: prospect.error,
+          };
+        }
+      }
+
+      // 5. Staging and Human-Gated Approval Workflow
       const campaign = prospect.campaignId
         ? await this.campaignRepository.findOne({ where: { id: prospect.campaignId } })
         : null;
@@ -318,10 +422,10 @@ export class DraftGenerationProcessor extends WorkerHost {
           prospect.draftStatus = ProspectDraftStatus.READY_FOR_APPROVAL;
           await this.emailDraftRepository.save(savedDraft);
           await this.prospectRepository.save(prospect);
-          this.logger.log(`[DraftGenerationProcessor] Draft ID ${savedDraft.id} verified with PASS. Locked in READY_FOR_APPROVAL awaiting human operator approval.`);
+          this.logger.log(`[DraftGenerationProcessor] Draft ID ${savedDraft.id} verified with PASS. In READY_FOR_APPROVAL awaiting human operator approval.`);
         }
       } else {
-        // Verification issues flagged
+        // Verification flagged for review
         savedDraft.status = OutreachDraftStatus.REVIEW_REQUIRED;
         prospect.draftStatus = ProspectDraftStatus.REVIEW_REQUIRED;
         await this.emailDraftRepository.save(savedDraft);

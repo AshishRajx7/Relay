@@ -6,6 +6,30 @@ import { Company } from '../../companies/entities/company.entity';
 import { CompanyResearch } from '../../company-research/entities/company-research.entity';
 import { DraftReasoningJson } from '../entities/email-draft.entity';
 
+/**
+ * @deprecated V1 OUTREACH LEGACY MODULE — DO NOT ROUTE NEW CALLS HERE.
+ *
+ * Active production pipeline is V3:
+ *   DraftGenerationProcessor -> EmailGenerationService.generatePersonalizedDraft
+ *   -> validateDraftDeterministic -> DraftVerificationService.verifyDraft
+ *   -> OutreachService.approveDraft -> GmailDraftService.createDraft
+ *
+ * This module is retained only for historical reference / comparison scripts.
+ * It contains incorrect word limits (75-125 vs required hard <=100 including signature)
+ * and a career-strategist framing that conflicts with the 10 global outreach rules.
+ * Any accidental future wiring will throw a runtime quarantine error.
+ */
+const COLD_EMAIL_GENERATOR_QUARANTINED: boolean = true;
+function quarantineGuard(caller: string) {
+  if (COLD_EMAIL_GENERATOR_QUARANTINED) {
+    throw new Error(
+      `[LEGACY-QUARANTINE] ${caller}: ColdEmailGeneratorService is deprecated. ` +
+        `Use EmailGenerationService.generatePersonalizedDraft (V3 pipeline) instead. ` +
+        `This legacy module has incorrect word limits and does not enforce the 10 global rules.`,
+    );
+  }
+}
+
 export interface GeneratedDraftResult {
   subject: string;
   subjectVariations: string[];
@@ -40,7 +64,9 @@ export class ColdEmailGeneratorService {
   constructor(private readonly aiProvider: AIProviderService) {}
 
   /**
-   * Generates a high-conviction, tailored cold email (75-125 words) for an engineering role.
+   * @deprecated V1 legacy endpoint — quarantined. See class-level JSDoc.
+   * Word limit corrected from 75-125 to max 100 (consistent with global rule 1)
+   * even though this module is not in the active pipeline.
    */
   async generateEmail(
     candidate: CandidateProfile,
@@ -48,6 +74,7 @@ export class ColdEmailGeneratorService {
     company: Company,
     research?: CompanyResearch | null,
   ): Promise<GeneratedDraftResult> {
+    quarantineGuard('ColdEmailGeneratorService.generateEmail');
     const candidateName = candidate.name || 'Software Engineer';
     const candidateTitle = candidate.title || 'Software Engineer';
     const candidateSkills = [
@@ -82,8 +109,9 @@ export class ColdEmailGeneratorService {
     const systemPrompt = `You are an elite software engineering career strategist and executive outreach copywriter.
 Your goal is to write a concise, compelling, high-conviction cold email from a software engineer candidate to an engineering leader or founder.
 
-CRITICAL RULES:
-1. Target Length: STRICTLY between 75 and 125 words. No fluff, no boilerplate ("I hope this email finds you well" is FORBIDDEN).
+CRITICAL RULES (legacy path — corrected to align with global rule 1 even though this path is quarantined):
+1. Target Length: STRICTLY ≤100 words INCLUDING GREETING + BODY + CTA + SIGN-OFF + SIGNATURE.
+   No fluff, no boilerplate ("I hope this email finds you well" is FORBIDDEN).
 2. Tone: Direct, respectful, peer-to-peer technical engineer. High agency and concrete.
 3. Structure:
    - Line 1 (Hook / Why Company): Specifically reference their tech stack, recent milestone, or core technical problem space from the company research.

@@ -18,10 +18,10 @@ interface BuildPipelineProps {
 export const BuildPipeline: React.FC<BuildPipelineProps> = ({ overview, status }) => {
   const total = overview?.totalProspects ?? 0;
   const researched = overview?.researchedProspects ?? 0;
-  const synthesized = overview?.synthesizedProspects ?? (overview?.processedProspects ?? (overview?.draftsGenerated ?? 0));
+  const synthesized = overview?.synthesizedProspects ?? (overview?.draftsGenerated ?? 0);
   const drafted = overview?.draftsGenerated ?? 0;
   const reviewCount = overview?.manualReviewCount ?? 0;
-  const approved = overview?.approvedCount ?? (overview?.status === 'COMPLETED' ? drafted : 0);
+  const approved = overview?.approvedCount ?? 0;
   const gmailCreated = overview?.gmailDraftCount ?? 0;
 
   // Determine active running stage based on campaign progression
@@ -31,7 +31,7 @@ export const BuildPipeline: React.FC<BuildPipelineProps> = ({ overview, status }
   const isDraftingRunning = isResearchComplete && synthesized < total;
   const isDraftingComplete = synthesized >= total && total > 0;
   const isReviewStage = isDraftingComplete && approved < drafted;
-  const isGmailComplete = isDraftingComplete && drafted > 0 && gmailCreated >= drafted;
+  const isGmailComplete = approved > 0 && gmailCreated >= approved;
 
   const stages = [
     {
@@ -57,8 +57,8 @@ export const BuildPipeline: React.FC<BuildPipelineProps> = ({ overview, status }
     {
       id: 'draft',
       name: 'AI Synthesizer',
-      label: 'V7 Drafts Generated',
-      count: `${synthesized}/${total}`,
+      label: 'Drafts Generated',
+      count: `${drafted}/${total}`,
       status: isDraftingComplete
         ? 'completed'
         : isDraftingRunning
@@ -83,8 +83,8 @@ export const BuildPipeline: React.FC<BuildPipelineProps> = ({ overview, status }
       id: 'gmail',
       name: 'Gmail Dispatch',
       label: 'Staged in Mailbox',
-      count: `${gmailCreated}/${drafted}`,
-      status: isGmailComplete ? 'completed' : isDraftingComplete && approved > 0 ? 'running' : 'waiting',
+      count: `${gmailCreated}/${approved}`,
+      status: isGmailComplete ? 'completed' : approved > 0 ? 'running' : 'waiting',
       icon: Send,
     },
   ];

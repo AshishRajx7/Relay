@@ -288,9 +288,11 @@ export class DraftQualityService {
     'developer',
     'software',
     'backend',
+    'frontend',
+    'fullstack',
+    'platform',
+    'systems',
     'resume',
-    'ashish',
-    'raj',
   ];
 
   public static readonly FORBIDDEN_SUBJECT_PATTERNS: RegExp[] = [
@@ -307,13 +309,19 @@ export class DraftQualityService {
     /\blet's talk\b/i,
   ];
 
-  public static hasMandatorySubjectKeyword(subject: string): boolean {
+  public static hasMandatorySubjectKeyword(subject: string, candidateName?: string): boolean {
     if (!subject) return false;
     const lower = subject.toLowerCase();
-    return DraftQualityService.MANDATORY_SUBJECT_KEYWORDS.some((kw) => {
+    const matchesKeyword = DraftQualityService.MANDATORY_SUBJECT_KEYWORDS.some((kw) => {
       const regex = new RegExp(`\\b${kw}\\b`, 'i');
       return regex.test(lower);
     });
+    if (matchesKeyword) return true;
+    if (candidateName) {
+      const nameParts = candidateName.toLowerCase().split(/\s+/).filter((p) => p.length >= 3);
+      return nameParts.some((np) => lower.includes(np));
+    }
+    return false;
   }
 
   public static isForbiddenSubject(subject: string): boolean {
@@ -394,9 +402,8 @@ export class DraftQualityService {
     if (!body) return false;
     const lower = body.toLowerCase();
     const rolePattern =
-      /\b(?:(?:backend|software|systems?|platform)\s+(?:engineer|developer|systems?|services?|infrastructure|apis?)|work\s+on\s+backend|building\s+(?:backend\s+)?apis?|databases?\s+and\s+(?:internal\s+)?services?)\b/i;
-    const companyPattern = /the\s+ninja\s+studio/i;
-    return rolePattern.test(lower) && companyPattern.test(lower);
+      /\b(?:(?:backend|software|systems?|platform)\s+(?:engineer|developer|systems?|services?|infrastructure|apis?)|work\s+on\s+backend|building\s+(?:backend\s+)?apis?|databases?\s+and\s+(?:internal\s+)?services?|software\s+engineering|backend\s+systems)\b/i;
+    return rolePattern.test(lower);
   }
 
   public hasResumeMention(body: string): boolean {

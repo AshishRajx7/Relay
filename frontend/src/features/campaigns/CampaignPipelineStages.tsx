@@ -10,15 +10,15 @@ export const CampaignPipelineStages: React.FC<CampaignPipelineStagesProps> = ({ 
   const total = overview?.totalProspects ?? 0;
   const researched = overview?.researchedProspects ?? 0;
   const drafted = overview?.draftsGenerated ?? 0;
+  const approved = overview?.approvedCount ?? 0;
   const gmailCreated = overview?.gmailDraftCount ?? 0;
-  const approved = Math.max(0, drafted - (overview?.manualReviewCount ?? 0));
 
   const stages = [
-    { label: 'Prospects Imported', count: total, complete: total > 0 },
-    { label: 'Research Complete', count: researched, complete: researched > 0 && researched >= total },
-    { label: 'Drafts Generated', count: drafted, complete: drafted > 0 && drafted >= researched },
-    { label: 'Approved', count: approved, complete: approved > 0 && approved >= drafted },
-    { label: 'Gmail Drafts Created', count: gmailCreated, complete: gmailCreated > 0 && gmailCreated >= approved },
+    { label: 'Prospects Imported', displayCount: total, hasItems: total > 0, complete: total > 0 },
+    { label: 'Research Complete', displayCount: researched, hasItems: researched > 0, complete: researched > 0 && researched >= total },
+    { label: 'Drafts Generated', displayCount: drafted, hasItems: drafted > 0, complete: drafted > 0 && drafted >= researched },
+    { label: 'Approved', displayCount: approved, hasItems: approved > 0, complete: approved > 0 && approved >= drafted },
+    { label: 'Gmail Drafts Created', displayCount: `${gmailCreated}/${approved}`, hasItems: gmailCreated > 0, complete: gmailCreated > 0 && gmailCreated >= approved },
   ];
 
   return (
@@ -37,7 +37,7 @@ export const CampaignPipelineStages: React.FC<CampaignPipelineStagesProps> = ({ 
           <div
             key={stage.label}
             className={`flex flex-col justify-between p-3 rounded border transition-colors ${
-              stage.count > 0
+              stage.hasItems
                 ? 'bg-relay-bg/80 border-relay-border-light'
                 : 'bg-relay-bg/30 border-relay-border/50 text-relay-subtle'
             }`}
@@ -55,7 +55,7 @@ export const CampaignPipelineStages: React.FC<CampaignPipelineStagesProps> = ({ 
 
             <div className="my-1">
               <div className="text-xl font-mono font-bold text-relay-text">
-                {stage.count}
+                {stage.displayCount}
               </div>
               <div className="text-xs font-medium text-relay-muted mt-0.5 truncate">
                 {stage.label}

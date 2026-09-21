@@ -148,11 +148,19 @@ export class OpenAIProvider implements IAIProvider {
     let rawContent = (response.choices[0]?.message?.content || '').trim();
     const usage = response.usage || { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 };
 
+    // Strip reasoning <think>...</think> tags if model produces Chain of Thought
+    if (rawContent.includes('<think>')) {
+      rawContent = rawContent.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+    }
+
     // Strip markdown code fences if model enclosed JSON in ```json ... ```
     const codeBlockMatch = rawContent.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
     if (codeBlockMatch) {
       rawContent = codeBlockMatch[1].trim();
     }
+
+    // Strip duplicate leading braces e.g. "{\n{"
+    rawContent = rawContent.replace(/^(\s*\{)+\s*\{/, '{');
 
     const cleanRawJson = (str: string): string => {
       return str.replace(/"([\s\S]*?)"(?=\s*[:,\]}])/g, (_match, inner) => {
@@ -163,6 +171,24 @@ export class OpenAIProvider implements IAIProvider {
           .replace(/\t/g, '\\t');
         return `"${fixed}"`;
       });
+    };
+
+    const tryAutoCloseJson = (str: string): string => {
+      let trimmed = str.trim();
+      if (!trimmed.startsWith('{')) {
+        const first = trimmed.indexOf('{');
+        if (first !== -1) trimmed = trimmed.substring(first);
+      }
+      const quoteCount = (trimmed.match(/(?<!\\)"/g) || []).length;
+      if (quoteCount % 2 !== 0) {
+        trimmed += '"';
+      }
+      const openBraces = (trimmed.match(/\{/g) || []).length;
+      const closeBraces = (trimmed.match(/\}/g) || []).length;
+      for (let i = 0; i < openBraces - closeBraces; i++) {
+        trimmed += '}';
+      }
+      return trimmed;
     };
 
     let parsedData: T;
@@ -179,59 +205,67 @@ export class OpenAIProvider implements IAIProvider {
           try {
             parsedData = JSON.parse(cleanRawJson(rawContent.substring(firstBrace, lastBrace + 1))) as T;
           } catch {
-            // continue to fallback 2
+            // continue
+          }
+        }
+
+        // Resilient fallback 1b: Auto-close truncated JSON
+        if (!parsedData) {
+          try {
+            parsedData = JSON.parse(cleanRawJson(tryAutoCloseJson(rawContent))) as T;
+          } catch {
+            // continue
           }
         }
       }
 
-      // Resilient fallback 2: Scan & merge individual JSON blocks & bullet points
+      // Resilient fallback 2: Regex extraction of variants and key-value fields
       if (!parsedData) {
         const merged: any = {};
-        const objRegex = /\{[\s\S]*?\n\}/g;
-        let match: RegExpExecArray | null;
-        while ((match = objRegex.exec(rawContent)) !== null) {
+
+        // Extract technicalVariant
+        const techMatch = rawContent.match(/"technicalVariant"\s*:\s*(\{[^}]+\})/);
+        if (techMatch) {
+          try { merged.technicalVariant = JSON.parse(cleanRawJson(techMatch[1])); } catch {}
+        }
+        // Extract startupVariant
+        const startupMatch = rawContent.match(/"startupVariant"\s*:\s*(\{[^}]+\})/);
+        if (startupMatch) {
+          try { merged.startupVariant = JSON.parse(cleanRawJson(startupMatch[1])); } catch {}
+        }
+        // Extract directVariant
+        const directMatch = rawContent.match(/"directVariant"\s*:\s*(\{[^}]+\})/);
+        if (directMatch) {
+          try { merged.directVariant = JSON.parse(cleanRawJson(directMatch[1])); } catch {}
+        }
+
+        const whyCompanyMatch = rawContent.match(/"whyCompany"\s*:\s*"([^"]+)"/);
+        if (whyCompanyMatch) merged.whyCompany = whyCompanyMatch[1];
+
+        const whyMeMatch = rawContent.match(/"whyMe"\s*:\s*"([^"]+)"/);
+        if (whyMeMatch) merged.whyMe = whyMeMatch[1];
+
+        const whyNowMatch = rawContent.match(/"whyNow"\s*:\s*"([^"]+)"/);
+        if (whyNowMatch) merged.whyNow = whyNowMatch[1];
+
+        const confMatch = rawContent.match(/"confidenceLevel"\s*:\s*"([^"]+)"/);
+        if (confMatch) merged.confidenceLevel = confMatch[1];
+
+        const evalMatch = rawContent.match(/"evaluations"\s*:\s*(\[\s*\{[\s\S]*\}\s*\])/);
+        if (evalMatch) {
           try {
-            const obj = JSON.parse(cleanRawJson(match[0]));
-            Object.assign(merged, obj);
+            merged.evaluations = JSON.parse(cleanRawJson(tryAutoCloseJson(evalMatch[1])));
           } catch {}
         }
 
-        if (!merged.whyCompany) {
-          const m = rawContent.match(/Why Company:\s*([^\n\r*]+)/i);
-          if (m) merged.whyCompany = m[1].trim();
-        }
-        if (!merged.whyMe) {
-          const m = rawContent.match(/Why Me:\s*([^\n\r*]+)/i);
-          if (m) merged.whyMe = m[1].trim();
-        }
-        if (!merged.whyNow) {
-          const m = rawContent.match(/Why Now:\s*([^\n\r*]+)/i);
-          if (m) merged.whyNow = m[1].trim();
-        }
-        if (!merged.confidenceLevel) {
-          const m = rawContent.match(/Confidence Level:\s*([A-Z]+)/i);
-          if (m) merged.confidenceLevel = m[1].trim();
-        }
-
-        if (Object.keys(merged).length > 0) {
+        if (
+          merged.technicalVariant ||
+          merged.startupVariant ||
+          merged.directVariant ||
+          (merged.evaluations && merged.evaluations.length > 0) ||
+          Object.keys(merged).length > 2
+        ) {
           parsedData = merged as T;
-        }
-      }
-
-      // Resilient fallback 3: If OUTREACH_GENERATION returned raw email text instead of JSON
-      if (!parsedData && request.feature === 'OUTREACH_GENERATION') {
-        const text = rawContent.replace(/```json/gi, '').replace(/```/g, '').trim();
-        if (text.includes('Hi ') || text.includes('I graduated') || text.includes('Software Engineer') || text.includes('Backend')) {
-          const subject = `Backend Engineer Application - Ashish Raj`;
-          parsedData = {
-            technicalVariant: { subject, body: text },
-            startupVariant: { subject, body: text },
-            directVariant: { subject, body: text },
-            whyCompany: 'Engineering alignment with backend systems.',
-            whyMe: 'Production backend experience in NestJS, PostgreSQL, and Redis.',
-            whyNow: 'Actively exploring Backend Engineering roles.',
-            confidenceLevel: 'HIGH',
-          } as unknown as T;
         }
       }
 

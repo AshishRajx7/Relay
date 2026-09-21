@@ -9,7 +9,7 @@ import {
   JoinColumn,
   Index,
 } from 'typeorm';
-import { Prospect } from '../../prospects/entities/prospect.entity';
+import { Prospect, PersonalizationLevel } from '../../prospects/entities/prospect.entity';
 import { DraftReasoning } from './draft-reasoning.entity';
 import { DraftQuality } from './draft-quality.entity';
 import { EmailDraftVariant } from './email-draft-variant.entity';
@@ -65,6 +65,14 @@ export class EmailDraft {
   })
   @Index('IDX_email_drafts_status')
   status: OutreachDraftStatus;
+
+  @Column({
+    name: 'personalization_level',
+    type: 'varchar',
+    length: 50,
+    nullable: true,
+  })
+  personalizationLevel: PersonalizationLevel | null;
 
   @Column({ name: 'gmail_draft_id', length: 255, nullable: true })
   gmailDraftId: string | null;

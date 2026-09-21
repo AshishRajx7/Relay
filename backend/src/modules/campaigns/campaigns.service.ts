@@ -11,6 +11,7 @@ import {
   ProspectDraftStatus,
   ProspectFailureType,
   ContactType,
+  PersonalizationLevel,
 } from '../prospects/entities/prospect.entity';
 import { ResumeFile, ResumeFileStatus } from '../resume/entities/resume-file.entity';
 import { CreateCampaignDto } from './dto/create-campaign.dto';
@@ -29,13 +30,21 @@ export interface CampaignOverviewDto {
   progressPercentage: number;
   totalProspects: number;
   processedProspects: number;
+  terminalProspects: number;
   researchedProspects: number;
   synthesizedProspects: number;
   draftsGenerated: number;
+  readyForApprovalCount: number;
   approvedCount: number;
   manualReviewCount: number;
+  refusedCount: number;
   failedCount: number;
   gmailDraftCount: number;
+  personalizationBreakdown: {
+    personalizedCount: number;
+    partiallyPersonalizedCount: number;
+    generalColdCount: number;
+  };
   cost: {
     crawlCount: number;
     llmCalls: number;
@@ -169,16 +178,30 @@ export class CampaignsService {
     let researchedProspects = 0;
     let synthesizedProspects = 0;
     let draftsGenerated = 0;
+    let readyForApprovalCount = 0;
     let approvedCount = 0;
     let manualReviewCount = 0;
+    let refusedCount = 0;
     let failedCount = 0;
     let gmailDraftCount = 0;
     let processedProspects = 0;
+    let terminalProspects = 0;
+    let personalizedCount = 0;
+    let partiallyPersonalizedCount = 0;
+    let generalColdCount = 0;
 
     // Group prospects by normalized domain for duplicate detection
     const companyContactMap = new Map<string, { companyName: string; contacts: Prospect[] }>();
 
     for (const p of prospects) {
+      if (p.personalizationLevel === PersonalizationLevel.PERSONALIZED) {
+        personalizedCount++;
+      } else if (p.personalizationLevel === PersonalizationLevel.PARTIALLY_PERSONALIZED) {
+        partiallyPersonalizedCount++;
+      } else if (p.personalizationLevel === PersonalizationLevel.GENERAL_COLD_OUTREACH) {
+        generalColdCount++;
+      }
+
       if (p.researchStatus === ProspectResearchStatus.RESEARCHED) researchedProspects++;
       if (p.researchStatus === ProspectResearchStatus.MANUAL_REVIEW || p.draftStatus === ProspectDraftStatus.REVIEW_REQUIRED) {
         manualReviewCount++;
@@ -195,11 +218,17 @@ export class CampaignsService {
       ) {
         draftsGenerated++;
       }
+      if (p.draftStatus === ProspectDraftStatus.READY_FOR_APPROVAL) {
+        readyForApprovalCount++;
+      }
       if (
         p.draftStatus === ProspectDraftStatus.APPROVED ||
         p.draftStatus === ProspectDraftStatus.GMAIL_DRAFT_CREATED
       ) {
         approvedCount++;
+      }
+      if (p.draftStatus === ProspectDraftStatus.NO_SUFFICIENT_OUTREACH_ANGLE) {
+        refusedCount++;
       }
       if (
         p.draftStatus !== ProspectDraftStatus.PENDING &&
@@ -212,6 +241,21 @@ export class CampaignsService {
       }
       if (p.draftStatus !== ProspectDraftStatus.PENDING || p.researchStatus === ProspectResearchStatus.UNSUPPORTED_CONTACT) {
         processedProspects++;
+      }
+
+      // Check terminal state:
+      // A prospect is terminal ONLY when approved, successfully staged in Gmail, or explicitly refused/failed.
+      // READY_FOR_APPROVAL is an active waiting state and is NOT terminal.
+      const isTerminal =
+        p.draftStatus === ProspectDraftStatus.APPROVED ||
+        p.draftStatus === ProspectDraftStatus.GMAIL_DRAFT_CREATED ||
+        p.draftStatus === ProspectDraftStatus.NO_SUFFICIENT_OUTREACH_ANGLE ||
+        p.draftStatus === ProspectDraftStatus.FAILED ||
+        p.researchStatus === ProspectResearchStatus.FAILED ||
+        p.researchStatus === ProspectResearchStatus.UNSUPPORTED_CONTACT;
+
+      if (isTerminal) {
+        terminalProspects++;
       }
 
       // Group for duplicate corporate outreach analysis (excluding freemail and bot addresses)
@@ -243,19 +287,25 @@ export class CampaignsService {
       }
     }
 
-    // Progress percentage
+    // Progress percentage based on processed prospects
     const progressPercentage = totalProspects > 0
       ? Math.min(100, Math.round((processedProspects / totalProspects) * 100))
       : 0;
 
-    // Dynamic campaign status determination
+    // Dynamic campaign status determination:
+    // A campaign is COMPLETED ONLY when all prospects have reached a terminal state!
     let currentStatus = campaign.status;
     if (totalProspects > 0) {
-      if (progressPercentage === 100) {
+      if (terminalProspects === totalProspects) {
         currentStatus = failedCount > 0 ? CampaignStatus.PARTIAL_SUCCESS : CampaignStatus.COMPLETED;
       } else if (processedProspects > 0) {
         currentStatus = CampaignStatus.PROCESSING;
       }
+    }
+
+    // Keep campaign table in sync with actual persisted gmail draft count
+    if (campaign.gmailDraftCount !== gmailDraftCount) {
+      await this.campaignRepository.update({ id }, { gmailDraftCount });
     }
 
     return {
@@ -265,13 +315,21 @@ export class CampaignsService {
       progressPercentage,
       totalProspects,
       processedProspects,
+      terminalProspects,
       researchedProspects,
       synthesizedProspects,
       draftsGenerated,
+      readyForApprovalCount,
       approvedCount,
       manualReviewCount,
+      refusedCount,
       failedCount,
       gmailDraftCount,
+      personalizationBreakdown: {
+        personalizedCount,
+        partiallyPersonalizedCount,
+        generalColdCount,
+      },
       cost: {
         crawlCount: campaign.crawlCount || 0,
         llmCalls: campaign.llmCalls || 0,

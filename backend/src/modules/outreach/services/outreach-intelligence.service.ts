@@ -3,6 +3,34 @@ import { AIProviderService } from '../../ai-provider/ai-provider.service';
 import { CandidateProfile } from '../../resume/entities/candidate-profile.entity';
 import { CompanyProfile } from '../../company-research/entities/company-profile.entity';
 
+/**
+ * @deprecated V2 OUTREACH LEGACY MODULE — DO NOT ROUTE NEW CALLS HERE.
+ *
+ * Active production pipeline is V3:
+ *   DraftGenerationProcessor -> CandidateMatchingService.matchCandidateToCompany
+ *   -> EmailGenerationService.generatePersonalizedDraft
+ *   -> validateDraftDeterministic -> DraftVerificationService.verifyDraft
+ *   -> OutreachService.approveDraft -> GmailDraftService.createDraft
+ *
+ * This module previously contained:
+ *   - hardcoded candidate experiences (violates global rule 7)
+ *   - hardcoded 'Ashish Raj' name fallback (violates rule 7)
+ *   - researchScore < 40 => halt outreach (violates rule 6; every valid prospect must continue)
+ *   - 150-word limit (conflicts rule 1's hard <=100 including signature)
+ * All four have been corrected in this quarantine, but the module still must not
+ * be wired into the active queue. Any accidental future wiring throws runtime error.
+ */
+const OUTREACH_INTELLIGENCE_QUARANTINED: boolean = true;
+function quarantineGuard(caller: string) {
+  if (OUTREACH_INTELLIGENCE_QUARANTINED) {
+    throw new Error(
+      `[LEGACY-QUARANTINE] ${caller}: OutreachIntelligenceService is deprecated. ` +
+        `Use CandidateMatchingService.matchCandidateToCompany + EmailGenerationService (V3 pipeline) instead. ` +
+        `This legacy module had rule-6/7/1 conflicts and is quarantined.`,
+    );
+  }
+}
+
 export type ContactType = 'HR' | 'RECRUITER' | 'FOUNDER' | 'ENGINEERING' | 'GENERAL';
 
 export interface CompanyResearchSnapshot {
@@ -41,41 +69,10 @@ export interface OutreachIntelligenceOutput {
 export class OutreachIntelligenceService {
   private readonly logger = new Logger(OutreachIntelligenceService.name);
 
-  // Available candidate experiences for high-conviction proof point selection
-  private readonly candidateExperiences = [
-    {
-      name: 'Activity Log Platform',
-      domain: 'Audit logging, event-driven architecture, NestJS EventEmitter2, HR tech, compliance, standardizing audit trails across 15+ modules',
-    },
-    {
-      name: 'BranchGuard Authorization System',
-      domain: 'Multi-tenant authorization, branch-based access control, security bypass remediation, Redis caching for auth lookups',
-    },
-    {
-      name: 'BullMQ Notification System',
-      domain: 'Idempotent delivery, replay-safe processing, retry backoff, batched queue throughput, paginated in-app feeds, event streaming',
-    },
-    {
-      name: 'Survey Platform',
-      domain: 'Complex backend builders, audience targeting, survey analytics, zero-leak anonymity architecture',
-    },
-    {
-      name: 'Redis Performance Optimization',
-      domain: 'High-throughput caching, latency reduction, removing database query bottlenecks, PostgreSQL indexing',
-    },
-    {
-      name: 'Sentinel Gateway',
-      domain: 'Distributed API gateway, Node.js, Redis rate limiting, OpenTelemetry, Jaeger distributed tracing, Prometheus metrics',
-    },
-    {
-      name: 'Minimal Workflow Engine',
-      domain: 'Graph-based workflow orchestration, FastAPI, AsyncIO, WebSockets, directed acyclic graph task execution',
-    },
-    {
-      name: "Founder Experience (D'Rons)",
-      domain: 'Quick commerce, vendor onboarding, order workflows, payment integrations, zero-to-one product ownership',
-    },
-  ];
+  // Candidate experiences are derived from DB (candidate_experience, candidate_profile projects/skills).
+  // Previously hardcoded list REMOVED per global rule 7. If this legacy module is invoked (quarantine off),
+  // it must read from the candidate profile DB entities, never from an in-code list.
+  private readonly candidateExperiences: Array<{ name: string; domain: string }> = [];
 
   constructor(private readonly aiProviderService: AIProviderService) {}
 
@@ -146,7 +143,9 @@ export class OutreachIntelligenceService {
   }
 
   /**
-   * Transforms prospect email, company intelligence, and candidate profile into deep outreach intelligence.
+   * @deprecated V2 legacy endpoint — quarantined. See file-level JSDoc.
+   * All rule conflicts (hardcoded facts, researchScore<40 halt, 150-word limit)
+   * are corrected in this quarantined copy, but the active V3 pipeline must be used.
    */
   async generateOutreachIntelligence(
     prospectEmail: string,
@@ -154,40 +153,42 @@ export class OutreachIntelligenceService {
     candidateProfile: CandidateProfile,
     crawledMarkdown?: string,
   ): Promise<OutreachIntelligenceOutput> {
+    quarantineGuard('OutreachIntelligenceService.generateOutreachIntelligence');
     const contactType = this.classifyContact(prospectEmail);
     const domain = companyProfile.domain;
     const companyName = companyProfile.companyName;
 
-    // 1. Synthesize candidate profile facts
+    // 1. Synthesize candidate profile facts EXCLUSIVELY from candidate_profile DB fields.
+    // No hardcoded name fallback, no hardcoded real-experience bullets (rule 7).
     const candidateSummary = candidateProfile.summary || '';
     const candidateSkills = Object.values(candidateProfile.skills || {}).flat().join(', ');
     const candidateProjects = candidateProfile.projects?.map((p) => `${p.name} (${p.techStack.join(', ')})`).join('; ') || '';
+    const candidateExperiencesFromDb = Array.isArray(candidateProfile.experience)
+      ? candidateProfile.experience
+          .slice(0, 4)
+          .map(
+            (e, i) =>
+              `  ${i + 1}. ${e.company || 'Previous role'} (${e.title || 'Software Engineer'}): ${
+                e.highlights?.slice(0, 2).join('; ') || e.sourceBullets?.slice(0, 2).join('; ') || ''
+              }`,
+          )
+          .filter((line) => line.trim().length > 8)
+          .join('\n')
+      : '';
+    const availableProjectsFromDb = (candidateProfile.projects || []).map((p: any) => `"${p.name}"`);
 
     // 2. AI Intelligence & Personalization Synthesis Prompt
     const systemPrompt = `You are a Principal AI Outreach Intelligence Architect.
-Your goal is to perform deep technical research and synthesize a high-conviction, personalized cold outreach package.
+Your goal is to perform deep technical research and synthesize a truthful, personalized cold outreach package.
 
-Candidate Profile Facts (STRICT - ZERO HALLUCINATION):
-- Name: ${candidateProfile.name || 'Ashish Raj'}
-- Title: ${candidateProfile.title || 'Software Engineer'}
+Candidate Profile Facts (STRICT - ZERO HALLUCINATION, facts ONLY from the candidate_profile DB record):
+- Name: ${candidateProfile.name ? candidateProfile.name : 'USE CANDIDATE NAME FROM DATABASE OR LEAVE EMPTY'}
+- Title: ${candidateProfile.title ? candidateProfile.title : 'Software Engineer (from profile)'}
 - Summary: ${candidateSummary}
 - Core Skills: ${candidateSkills}
 - Key Projects: ${candidateProjects}
-- Real Experience:
-  1. The Ninja Studio (Software Engineer & Backend Intern): Activity Log platform on NestJS EventEmitter2 across 15+ HR modules, Super Admin impersonation with AsyncLocalStorage audit trails, BranchGuard branch-based authorization, BullMQ idempotent notification engine with retry backoff, Redis caching.
-  2. D'Rons (Founder & Full Stack Lead): Quick commerce platform, backend APIs, vendor workflows, payment integrations.
-  3. Sentinel Gateway: Distributed API Gateway with Node.js, Redis rate limiting, OpenTelemetry, Jaeger, Prometheus.
-  4. Minimal Workflow Engine: Graph-based DAG orchestration in FastAPI, AsyncIO, WebSockets.
-
-Available Projects for "chosenProject":
-- "Activity Log Platform"
-- "BranchGuard Authorization System"
-- "BullMQ Notification System"
-- "Survey Platform"
-- "Redis Performance Optimization"
-- "Sentinel Gateway"
-- "Minimal Workflow Engine"
-- "Founder Experience (D'Rons)"
+${candidateExperiencesFromDb ? `- Verified Experience (from candidate_profile.experience rows only):\n${candidateExperiencesFromDb}\n` : ''}
+- Available Projects for "chosenProject" (candidate_profile.projects DB rows only; DO NOT INVENT NAMES): [${availableProjectsFromDb.join(', ') || 'no named projects in DB; choose one from the experience descriptions above or leave empty'}]
 
 Instructions:
 1. companyResearchSnapshot:
@@ -198,18 +199,20 @@ Instructions:
    - hiringSignals: Engineering roles or technical focus areas.
    - recentInitiatives: Major product launches, scaling milestones, or platform expansions.
 2. chosenProject & whyRelevant:
-   - Pick the single strongest match among the candidate's available experiences.
+   - Pick the single strongest match among the candidate's VERIFIED DB experiences only.
+   - If no verified DB project/experience names are present, leave chosenProject empty string and write whyRelevant as a generic truthful note based on role + core tech.
    - whyRelevant: 1 sentence explaining the technical overlap with the company's architecture.
 3. whyCompany:
    - 1-2 sentences referencing specific company research observations (no generic flattery).
 4. whyMe:
-   - 1-2 sentences summarizing candidate's production experience with NestJS, PostgreSQL, Redis, BullMQ, and distributed systems.
+   - 1-2 sentences summarizing candidate's production experience using ONLY verified core technologies present in candidate_profile.skills.
 5. Email Generation (subject & emailBody):
    - Target recipient role: ${contactType}
-   - STRICT LIMIT: Maximum 150 words.
+   - STRICT LIMIT: Maximum 100 words, COUNTING EVERYTHING THE RECIPIENT RECEIVES (greeting + body + CTA + sign-off + signature). Rule 1.
    - Natural, human, peer-to-peer engineer tone.
    - NO AI buzzwords ("thrilled", "cutting-edge", "synergy", "paradigm").
    - Low friction call to action (e.g. "Open to a brief 10-minute chat this week?").
+   - Weak company research MUST produce a truthful GENERAL cold email (researchScore low means use only verified candidate facts, generic intro); NEVER HALT OUTPUT, NEVER RETURN EMPTY emailBody. Rule 6.
 
 Output pure JSON conforming to this schema:
 {
@@ -229,12 +232,12 @@ Output pure JSON conforming to this schema:
     "hiringSignals": ["string"],
     "recentInitiatives": ["string"]
   },
-  "chosenProject": "BullMQ Notification System",
+  "chosenProject": "string (empty if no verified DB evidence)",
   "whyRelevant": "string",
   "whyCompany": "string",
   "whyMe": "string",
   "subject": "string",
-  "emailBody": "string"
+  "emailBody": "string (always return a truthful general body if researchScore<40; rule 6 prohibits halting)"
 }`;
 
     const contextText = crawledMarkdown
@@ -260,10 +263,28 @@ Output pure JSON conforming to this schema:
       pagesCrawled,
     );
 
-    // Rule 9: If researchScore < 40, do not generate final outreach email; flag manual review
+    // Rule 6 CORRECTED (was rule 9): Every valid imported prospect continues.
+    // researchScore < 40 MUST fall back to a truthful general cold email,
+    // it MUST NOT halt output or return null subject/body.
+    // We flag manual review for operator visibility, but we still continue to draft.
     const requiresManualReview = researchScore < 40;
-    const finalSubject = requiresManualReview ? null : (data.subject || null);
-    const finalBody = requiresManualReview ? null : (data.emailBody || null);
+    const finalSubject = (data.subject || `Software engineer reaching out — ${candidateProfile.name || 'candidate'}`).slice(0, 78);
+    const finalBody = (data.emailBody || '').trim() ||
+      `Hi, I'm ${candidateProfile.name || 'a software engineer'}, ${candidateProfile.title || 'a software engineer'} with experience in ${candidateSkills || 'production backend systems'}. Reaching out to learn more about your team and any relevant engineering opportunities. Resume attached. Best, ${candidateProfile.name || ''}`;
+    // For legacy quarantined path only: enforce ≤100 words (rule 1) even though outputting
+    const finalBodyClipped = finalBody.split(/\s+/).filter(Boolean).slice(0, 96).join(' ');
+
+    // Chosen project and rationale fallbacks ONLY from DB evidence actually present,
+    // no hardcoded defaults (rule 7).
+    const dbProjectFallback = (candidateProfile.projects?.[0] as any)?.name ||
+      candidateProfile.experience?.[0]?.whatWasBuilt?.[0] ||
+      '';
+    const whyRelevantFallback =
+      dbProjectFallback ? `Relevant engineering background.` : `General software engineering interest in ${companyName}.`;
+    const dbWhyMeFallback =
+      candidateSkills ? `Core technical skills: ${candidateSkills.split(',').slice(0, 5).join(', ')}.` :
+      `Production software engineering experience.`;
+    const dbWhyCompanyFallback = `Interested in learning more about the team at ${companyName}.`;
 
     return {
       companyProfile: {
@@ -284,12 +305,12 @@ Output pure JSON conforming to this schema:
       },
       researchScore,
       contactType,
-      chosenProject: data.chosenProject || 'BullMQ Notification System',
-      whyRelevant: data.whyRelevant || 'Event-driven architecture and asynchronous message processing.',
-      whyCompany: data.whyCompany || `The company's focus on scalable platforms aligns with my experience building event-driven backend systems.`,
-      whyMe: data.whyMe || `Built production-grade authorization, notification, audit logging and workflow systems using NestJS, PostgreSQL, Redis and BullMQ.`,
+      chosenProject: (data.chosenProject && String(data.chosenProject).trim().length > 0) ? data.chosenProject : dbProjectFallback,
+      whyRelevant: data.whyRelevant || whyRelevantFallback,
+      whyCompany: data.whyCompany || dbWhyCompanyFallback,
+      whyMe: data.whyMe || dbWhyMeFallback,
       subject: finalSubject,
-      emailBody: finalBody,
+      emailBody: finalBodyClipped,
       requiresManualReview,
     };
   }

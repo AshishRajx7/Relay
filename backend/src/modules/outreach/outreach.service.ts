@@ -509,10 +509,12 @@ export class OutreachService {
     await this.prospectRepository.save(draft.prospect);
 
     if (draft.prospect.campaignId) {
-      await this.campaignRepository.increment(
+      const actualCount = await this.prospectRepository.count({
+        where: { campaignId: draft.prospect.campaignId, draftStatus: ProspectDraftStatus.GMAIL_DRAFT_CREATED },
+      });
+      await this.campaignRepository.update(
         { id: draft.prospect.campaignId },
-        'gmailDraftCount',
-        1,
+        { gmailDraftCount: actualCount },
       );
     }
 

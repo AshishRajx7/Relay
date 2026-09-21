@@ -16,11 +16,14 @@ export interface CampaignOverviewDto {
   progressPercentage: number;
   totalProspects: number;
   processedProspects: number;
+  terminalProspects?: number;
   researchedProspects: number;
   synthesizedProspects?: number;
   draftsGenerated: number;
-  approvedCount?: number;
+  readyForApprovalCount?: number;
+  approvedCount: number;
   manualReviewCount: number;
+  refusedCount?: number;
   failedCount: number;
   gmailDraftCount: number;
   cost: {

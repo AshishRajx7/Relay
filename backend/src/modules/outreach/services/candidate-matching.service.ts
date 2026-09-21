@@ -12,7 +12,7 @@ import { CompanySource } from '../../company-research/entities/company-source.en
 import { RelationshipMatchEntity, RelationshipQuality, RelationshipType } from '../entities/relationship-match.entity';
 import { OutreachStrategyEntity } from '../entities/outreach-strategy.entity';
 import { AIProviderService } from '../../ai-provider/ai-provider.service';
-import { NoOutreachAngleReason } from '../../prospects/entities/prospect.entity';
+import { NoOutreachAngleReason, PersonalizationLevel } from '../../prospects/entities/prospect.entity';
 
 export enum OutreachStrategy {
   TECH_STACK_MATCH = 'TECH_STACK_MATCH',
@@ -38,7 +38,7 @@ export interface CandidateMatchResult {
 
 export interface MultiResumeMatchResult {
   selectedCandidate: CandidateProfile;
-  selectedResumeId?: string;
+  selectedResumeId: string;
   selectedResumeName: string;
   selectedResumeCategory: string;
   matchScore: number;
@@ -60,10 +60,22 @@ export interface MultiResumeMatchResult {
   matchResult: CandidateMatchResult;
 }
 
+export interface CandidateFallbackFacts {
+  name: string;
+  roleTitle: string;
+  currentOrRecentEmployer: string;
+  coreTechnologies: string[];
+  platformAreas: string[];
+  notableAchievements: string[];
+  keyDeliverables: string[];
+}
+
 export interface V3MatchOutput {
+  personalizationLevel: PersonalizationLevel;
   match: RelationshipMatchEntity | null;
   candidateEvidence: CandidateEvidenceEntity | null;
   companyEvidence: CompanyEvidenceEntity | null;
+  candidateFacts: CandidateFallbackFacts;
   refusalReason?: NoOutreachAngleReason;
   compositeScore: number;
 }
@@ -82,6 +94,8 @@ export class CandidateMatchingService {
   private readonly matchingModel: string;
 
   constructor(
+    @InjectRepository(CandidateProfile)
+    private readonly candidateProfileRepo: Repository<CandidateProfile>,
     @InjectRepository(CandidateEvidenceEntity)
     private readonly candidateEvidenceRepo: Repository<CandidateEvidenceEntity>,
     @InjectRepository(CandidateExperienceEntity)
@@ -101,6 +115,52 @@ export class CandidateMatchingService {
       this.configService?.get<string>('ai.matchingModel') ||
       this.configService?.get<string>('ai.model') ||
       'nvidia/nemotron-3-super-120b-a12b';
+  }
+
+  /**
+   * Dynamically extracts verified candidate facts directly from candidate profile and evidence database.
+   * Never fabricates candidate facts.
+   */
+  public async extractCandidateFacts(candidateProfileId: string): Promise<CandidateFallbackFacts> {
+    const profile = await this.candidateProfileRepo.findOne({
+      where: { id: candidateProfileId },
+      relations: ['experiences', 'evidenceClaims'],
+    });
+
+    const name = profile?.name?.trim() || 'Software Engineer';
+    const roleTitle = profile?.title?.trim() || profile?.experiences?.[0]?.roleTitle?.trim() || 'Software Engineer';
+    const currentOrRecentEmployer = profile?.experiences?.[0]?.employer?.trim() || '';
+
+    // Collect verified technologies from skills
+    const allTechs: string[] = [
+      ...(profile?.skills?.languages || []),
+      ...(profile?.skills?.frameworks || []),
+      ...(profile?.skills?.databases || []),
+    ].filter(Boolean);
+
+    // Collect platform patterns / domain areas from profile.skills.patterns or tools
+    const platformAreas: string[] = [
+      ...(profile?.skills?.patterns || []),
+      ...(profile?.skills?.tools || []),
+    ].filter(Boolean);
+
+    // Extract achievements (e.g. Codeforces rating, contest rankings, hackathons)
+    const notableAchievements: string[] = (profile?.achievements || []).filter(Boolean);
+
+    // Extract key deliverables from candidate evidence
+    const keyDeliverables: string[] = (profile?.evidenceClaims || [])
+      .map((e) => e.deliverableName)
+      .filter((d): d is string => Boolean(d && d.trim().length > 3));
+
+    return {
+      name,
+      roleTitle,
+      currentOrRecentEmployer,
+      coreTechnologies: Array.from(new Set(allTechs)),
+      platformAreas: Array.from(new Set(platformAreas)),
+      notableAchievements,
+      keyDeliverables: Array.from(new Set(keyDeliverables)),
+    };
   }
 
   /**
@@ -560,49 +620,72 @@ export class CandidateMatchingService {
       .slice(0, 4)
       .map((s) => s.charAt(0).toUpperCase() + s.slice(1));
 
-    // Extract concrete evidence points used in email
+    // Extract concrete evidence points used in email.
+    // ONLY from verified database entities (candidate_profile, candidate_experience, matchResult.chosenProject).
+    // No hardcoded fallbacks. If evidence is sparse, the array stays short / empty;
+    // downstream consumers handle sparse evidence via GENERAL_COLD_OUTREACH.
     const evidenceUsedInEmail: string[] = [];
-    if (selectedItem.matchResult.chosenProject) {
+    if (selectedItem.matchResult.chosenProject && selectedItem.matchResult.chosenProject.trim().length > 0) {
       evidenceUsedInEmail.push(selectedItem.matchResult.chosenProject);
+    }
+    if (Array.isArray(selectedCand.projects) && selectedCand.projects.length > 0) {
+      for (const p of selectedCand.projects.slice(0, 3)) {
+        const pName = typeof p === 'string' ? p : (p as any)?.name;
+        if (pName && !evidenceUsedInEmail.includes(pName)) {
+          evidenceUsedInEmail.push(pName);
+        }
+      }
     }
     if (Array.isArray(selectedCand.experience)) {
       for (const exp of selectedCand.experience) {
         if (Array.isArray(exp.whatWasBuilt) && exp.whatWasBuilt.length > 0) {
           for (const b of exp.whatWasBuilt) {
-            if (evidenceUsedInEmail.length < 3 && !evidenceUsedInEmail.includes(b)) {
+            if (evidenceUsedInEmail.length < 3 && typeof b === 'string' && b.trim().length > 0 && !evidenceUsedInEmail.includes(b)) {
               evidenceUsedInEmail.push(b);
             }
           }
         }
         if (Array.isArray(exp.scaleAndOwnership) && exp.scaleAndOwnership.length > 0) {
           for (const s of exp.scaleAndOwnership) {
-            if (evidenceUsedInEmail.length < 3 && !evidenceUsedInEmail.includes(s)) {
+            if (evidenceUsedInEmail.length < 3 && typeof s === 'string' && s.trim().length > 0 && !evidenceUsedInEmail.includes(s)) {
               evidenceUsedInEmail.push(s);
             }
           }
         }
       }
     }
-    if (evidenceUsedInEmail.length === 0) {
-      evidenceUsedInEmail.push(
-        'Audit Logging Platform',
-        'BranchGuard Redis Caching',
-        'Leave Management Optimization',
-      );
+    if (Array.isArray((selectedCand as any).achievements) && (selectedCand as any).achievements.length > 0 && evidenceUsedInEmail.length < 3) {
+      for (const a of (selectedCand as any).achievements.slice(0, 3 - evidenceUsedInEmail.length)) {
+        const aText = typeof a === 'string' ? a : (a as any)?.description || (a as any)?.name;
+        if (aText && !evidenceUsedInEmail.includes(aText)) {
+          evidenceUsedInEmail.push(aText);
+        }
+      }
     }
 
-    const whyMePoints = [
-      `Production backend engineering across ${keyMatches.slice(0, 3).join(', ') || 'distributed systems'}`,
-      `Built idempotent, high-concurrency event pipelines and caching layers`,
-      `Direct experience solving database query bottlenecks and index performance`,
-      `Autonomous full-lifecycle ownership from database schema to API delivery`,
-    ];
+    // Derive whyMePoints and talking points ONLY from DB-backed fields actually present.
+    // Never hardcode generic engineering claims.
+    const whyMePoints: string[] = [];
+    if (keyMatches.length > 0) {
+      whyMePoints.push(`Production backend engineering across ${keyMatches.slice(0, 3).join(', ')}`);
+    }
+    if (Array.isArray(selectedCand.skills)) {
+      const flatSkills = Object.values(selectedCand.skills || {}).flat();
+      if (flatSkills.length > 0) {
+        whyMePoints.push(`Core technical skills: ${flatSkills.slice(0, 6).join(', ')}`);
+      }
+    }
+    if (evidenceUsedInEmail.length > 0) {
+      whyMePoints.push(`Representative deliverables: ${evidenceUsedInEmail.slice(0, 3).join(', ')}`);
+    }
 
-    const recommendedTalkingPoints = [
-      `Discuss architecture for high-throughput event processing and audit trails`,
-      `Share benchmark results from Redis caching optimizations and latency reductions`,
-      `Exchange perspectives on database isolation patterns and multi-tenant authorization`,
-    ];
+    const recommendedTalkingPoints: string[] = [];
+    if (keyMatches.length > 0) {
+      recommendedTalkingPoints.push(`Discuss architecture and trade-offs involving ${keyMatches.slice(0, 3).join(', ')}`);
+    }
+    if (evidenceUsedInEmail.length > 0) {
+      recommendedTalkingPoints.push(`Share more details on ${evidenceUsedInEmail.slice(0, 2).join(' and ')}`);
+    }
 
     const allResumeScores = scoredResumes.map((r) => ({
       resumeId: r.candidate.resumeFile?.id || r.candidate.id,
@@ -647,6 +730,9 @@ export class CandidateMatchingService {
   ): Promise<V3MatchOutput> {
     this.logger.log(`Executing V3 hybrid relational matching for company "${company.companyName}" and candidate profile ${candidateProfileId}`);
 
+    // Dynamically extract verified candidate facts from database
+    const candidateFacts = await this.extractCandidateFacts(candidateProfileId);
+
     // 1. Load candidate evidence
     let candidateEvidences = await this.candidateEvidenceRepo.find({
       where: { candidateProfileId },
@@ -656,10 +742,11 @@ export class CandidateMatchingService {
     if (!candidateEvidences || candidateEvidences.length === 0) {
       this.logger.warn(`Candidate profile ${candidateProfileId} has no normalized evidence claims`);
       return {
+        personalizationLevel: PersonalizationLevel.GENERAL_COLD_OUTREACH,
         match: null,
         candidateEvidence: null,
         companyEvidence: null,
-        refusalReason: NoOutreachAngleReason.INSUFFICIENT_CANDIDATE_EVIDENCE,
+        candidateFacts,
         compositeScore: 0,
       };
     }
@@ -670,18 +757,14 @@ export class CandidateMatchingService {
       relations: ['source'],
     });
 
-    // If company has no evidence claims, check if company research was deficient
-    const hasCompanySignals =
-      (company.techSignals && company.techSignals.length > 0) ||
-      (company.products && company.products.length > 0) ||
-      (company.summary && company.summary.trim().length > 20);
-
-    if (!hasCompanySignals && companyEvidences.length === 0) {
+    if (companyEvidences.length === 0) {
+      this.logger.log(`Outreach for ${company.companyName}: GENERAL_COLD_OUTREACH (0 verified company evidence claims)`);
       return {
+        personalizationLevel: PersonalizationLevel.GENERAL_COLD_OUTREACH,
         match: null,
         candidateEvidence: null,
         companyEvidence: null,
-        refusalReason: NoOutreachAngleReason.INSUFFICIENT_COMPANY_RESEARCH,
+        candidateFacts,
         compositeScore: 0,
       };
     }
@@ -732,40 +815,7 @@ export class CandidateMatchingService {
       (e) => !isGenericRecruiting(e.verbatimQuote) && !isGenericRecruiting(e.atomicClaim),
     );
 
-    // Complement company evidence with verified product initiatives and architectural summary
-    const synthesizedEvidences: CompanyEvidenceEntity[] = [];
-    if (company.products && Array.isArray(company.products)) {
-      for (const prod of company.products) {
-        const prodName = typeof prod === 'string' ? prod.trim() : String((prod as any)?.name || '').trim();
-        if (prodName.length > 2) {
-          synthesizedEvidences.push(
-            this.companyEvidenceRepo.create({
-              companyProfileId: company.id,
-              verbatimQuote: `${company.companyName} product: ${prodName}`,
-              atomicClaim: `${company.companyName} develops and provides ${prodName}.`,
-              category: 'PRODUCT',
-              confidence: 1.0,
-              isSourceFact: true,
-            }),
-          );
-        }
-      }
-    }
-
-    if (company.summary && company.summary.trim().length > 30) {
-      synthesizedEvidences.push(
-        this.companyEvidenceRepo.create({
-          companyProfileId: company.id,
-          verbatimQuote: company.summary,
-          atomicClaim: company.summary,
-          category: 'ARCHITECTURE',
-          confidence: 1.0,
-          isSourceFact: true,
-        }),
-      );
-    }
-
-    let evaluationCompanyEvidences = [...technicalCompanyEvidences, ...synthesizedEvidences];
+    let evaluationCompanyEvidences = technicalCompanyEvidences;
     if (evaluationCompanyEvidences.length === 0) {
       evaluationCompanyEvidences = companyEvidences;
     }
@@ -835,11 +885,13 @@ export class CandidateMatchingService {
     }
 
     if (plausiblePairs.length === 0) {
+      this.logger.log(`Outreach for ${company.companyName}: GENERAL_COLD_OUTREACH (No candidate-company overlap pairs found)`);
       return {
+        personalizationLevel: PersonalizationLevel.GENERAL_COLD_OUTREACH,
         match: null,
         candidateEvidence: null,
         companyEvidence: null,
-        refusalReason: NoOutreachAngleReason.NO_DOMAIN_ALIGNMENT,
+        candidateFacts,
         compositeScore: 0,
       };
     }
@@ -891,6 +943,12 @@ Evaluate each candidate ↔ company pair across explicit qualitative criteria:
    - 40-64: WEAK connection
    - 0-39: Generic tech overlap or disqualified
 
+CRITICAL INSTRUCTIONS:
+- You must output VALID JSON ONLY.
+- Do NOT output any internal thoughts, reasoning steps, conversational text, preambles, or markdown formatting outside the JSON.
+- Start directly with { and end with }.
+- Keep each analyticalRationale concise (1-2 sentences).
+
 Output pure JSON conforming to:
 {
   "evaluations": [
@@ -939,7 +997,7 @@ Output pure JSON conforming to:
         userPrompt: `COMPANY: ${company.companyName} (${company.industry}, ${company.businessModel})\nPAIRS TO EVALUATE:\n${JSON.stringify(pairSummaries, null, 2)}`,
         feature: 'OUTREACH_GENERATION',
         model: this.matchingModel,
-        maxTokens: 1500,
+        maxTokens: 8192,
         temperature: 0.1,
       });
 
@@ -965,92 +1023,48 @@ Output pure JSON conforming to:
       const bestEvaluation = evaluations[0];
       if (!bestEvaluation) {
         return {
+          personalizationLevel: PersonalizationLevel.GENERAL_COLD_OUTREACH,
           match: null,
           candidateEvidence: null,
           companyEvidence: null,
-          refusalReason: NoOutreachAngleReason.LOW_RELATIONSHIP_STRENGTH,
+          candidateFacts,
           compositeScore: 0,
         };
       }
 
-      // 1. Check fundamentally divergent domain
-      if (bestEvaluation.architecturalCorrespondence === 'DIVERGENT') {
-        this.logger.warn(
-          `Outreach refused for ${company.companyName}: NO_DOMAIN_ALIGNMENT (${bestEvaluation.analyticalRationale})`,
+      // Qualitative determination of personalization level:
+      // - PERSONALIZED: specific company signal + specific candidate deliverable (HIGH quality & EXACT_PARALLEL)
+      // - PARTIALLY_PERSONALIZED: company signal + broader candidate capability (MODERATE quality or SIMILAR_CLASS with genuine technical substance)
+      // - GENERAL_COLD_OUTREACH: weak/insufficient company research, therefore truthful candidate-focused cold outreach
+      const isDivergent = bestEvaluation.architecturalCorrespondence === 'DIVERGENT';
+      const isGeneric = bestEvaluation.genericOverlapOnly || bestEvaluation.relationshipQuality === 'DISQUALIFIED_GENERIC_OVERLAP';
+      const isWeak = bestEvaluation.relationshipQuality === 'WEAK' || bestEvaluation.companyEvidenceStrength === 'SPECULATIVE';
+
+      if (isDivergent || isGeneric || isWeak) {
+        this.logger.log(
+          `Outreach for ${company.companyName}: GENERAL_COLD_OUTREACH (Qualitative: quality=${bestEvaluation.relationshipQuality}, arch=${bestEvaluation.architecturalCorrespondence}, generic=${bestEvaluation.genericOverlapOnly})`,
         );
         return {
+          personalizationLevel: PersonalizationLevel.GENERAL_COLD_OUTREACH,
           match: null,
           candidateEvidence: null,
           companyEvidence: null,
-          refusalReason: NoOutreachAngleReason.NO_DOMAIN_ALIGNMENT,
-          compositeScore: bestEvaluation.rankingScore || 20,
-        };
-      }
-
-      // 2. Explicit generic overlap or disqualified generic overlap
-      if (bestEvaluation.genericOverlapOnly || bestEvaluation.relationshipQuality === 'DISQUALIFIED_GENERIC_OVERLAP') {
-        this.logger.warn(`Outreach refused for ${company.companyName}: GENERIC_TECH_OVERLAP_ONLY (${bestEvaluation.analyticalRationale})`);
-        return {
-          match: null,
-          candidateEvidence: null,
-          companyEvidence: null,
-          refusalReason: NoOutreachAngleReason.GENERIC_TECH_OVERLAP_ONLY,
+          candidateFacts,
           compositeScore: bestEvaluation.rankingScore || 25,
         };
       }
 
-      // 3. Check weak relationship
-      if (bestEvaluation.relationshipQuality === 'WEAK') {
-        const refusalReason =
-          bestEvaluation.companyEvidenceStrength === 'GENERAL_TECH' || bestEvaluation.companyEvidenceStrength === 'SPECULATIVE'
-            ? NoOutreachAngleReason.GENERIC_TECH_OVERLAP_ONLY
-            : bestEvaluation.companyEvidenceStrength === 'CLEAR_ACUTE_NEED' && bestEvaluation.candidateOwnership !== 'PRIMARY'
-            ? NoOutreachAngleReason.INSUFFICIENT_CANDIDATE_EVIDENCE
-            : NoOutreachAngleReason.LOW_RELATIONSHIP_STRENGTH;
-
-        this.logger.warn(`Outreach refused for ${company.companyName}: ${refusalReason} (${bestEvaluation.analyticalRationale})`);
-        return {
-          match: null,
-          candidateEvidence: null,
-          companyEvidence: null,
-          refusalReason,
-          compositeScore: bestEvaluation.rankingScore || 35,
-        };
-      }
-
-      // 3. Digital agency / marketing web portals with no specialized architectural problem
-      const isGenericWebAgency = /agency|marketing|web design|landing pages|small business clients/i.test(
-        `${company.industry || ''} ${company.businessModel || ''} ${company.summary || ''}`,
-      );
-      if (isGenericWebAgency && bestEvaluation.architecturalCorrespondence !== 'EXACT_PARALLEL') {
-        this.logger.warn(
-          `Outreach refused for ${company.companyName}: GENERIC_TECH_OVERLAP_ONLY (Generic web/marketing agency overlap)`,
-        );
-        return {
-          match: null,
-          candidateEvidence: null,
-          companyEvidence: null,
-          refusalReason: NoOutreachAngleReason.GENERIC_TECH_OVERLAP_ONLY,
-          compositeScore: bestEvaluation.rankingScore || 30,
-        };
-      }
-
-      // 4. Low ranking score gate (< 60)
-      if ((bestEvaluation.rankingScore || 0) < 60) {
-        this.logger.warn(
-          `Outreach refused for ${company.companyName}: LOW_RELATIONSHIP_STRENGTH (Score ${bestEvaluation.rankingScore} < 60)`,
-        );
-        return {
-          match: null,
-          candidateEvidence: null,
-          companyEvidence: null,
-          refusalReason: NoOutreachAngleReason.LOW_RELATIONSHIP_STRENGTH,
-          compositeScore: bestEvaluation.rankingScore || 50,
-        };
-      }
-
-      // Valid relationship match (HIGH or MODERATE)
       const bestPair = topPairs[bestEvaluation.pairIndex] || topPairs[0];
+
+      let personalizationLevel: PersonalizationLevel;
+      if (
+        bestEvaluation.relationshipQuality === 'HIGH' &&
+        bestEvaluation.architecturalCorrespondence === 'EXACT_PARALLEL'
+      ) {
+        personalizationLevel = PersonalizationLevel.PERSONALIZED;
+      } else {
+        personalizationLevel = PersonalizationLevel.PARTIALLY_PERSONALIZED;
+      }
 
       const matchEntity = this.matchRepo.create({
         companyEvidenceId: bestPair.companyEv.id,
@@ -1068,45 +1082,26 @@ Output pure JSON conforming to:
       });
 
       const savedMatch = await this.matchRepo.save(matchEntity);
-      this.logger.log(`Created RelationshipMatchEntity ${savedMatch.id} | Quality: ${bestEvaluation.relationshipQuality} | Deliverable: ${bestPair.candidateEv.deliverableName}`);
+      this.logger.log(
+        `Created RelationshipMatchEntity ${savedMatch.id} | Level: ${personalizationLevel} | Quality: ${bestEvaluation.relationshipQuality} | Deliverable: ${bestPair.candidateEv.deliverableName}`,
+      );
 
       return {
+        personalizationLevel,
         match: savedMatch,
         candidateEvidence: bestPair.candidateEv,
         companyEvidence: bestPair.companyEv,
-        compositeScore: bestEvaluation.rankingScore || 85,
+        candidateFacts,
+        compositeScore: bestEvaluation.rankingScore || 80,
       };
     } catch (err: any) {
       this.logger.error(`Error in semantic relationship matching: ${err.message}`, err.stack);
-      // Fallback only if candidate deliverable has strong direct overlap
-      const fallbackPair = topPairs[0];
-      if (fallbackPair && fallbackPair.recallScore >= 30) {
-        const matchEntity = this.matchRepo.create({
-          companyEvidenceId: fallbackPair.companyEv.id,
-          candidateEvidenceId: fallbackPair.candidateEv.id,
-          relationshipType: 'DIRECT_TECHNICAL',
-          isInferredRelationship: true,
-          analyticalRationale: `Direct engineering alignment on ${fallbackPair.candidateEv.deliverableName}`,
-          relationshipQuality: 'MODERATE',
-          rankingScore: 70,
-          directness: 'DIRECT',
-          evidenceSpecificity: 'HIGH',
-          candidateOwnership: 'PRIMARY',
-          genericOverlapDetected: false,
-        });
-        const savedMatch = await this.matchRepo.save(matchEntity);
-        return {
-          match: savedMatch,
-          candidateEvidence: fallbackPair.candidateEv,
-          companyEvidence: fallbackPair.companyEv,
-          compositeScore: 70,
-        };
-      }
       return {
+        personalizationLevel: PersonalizationLevel.GENERAL_COLD_OUTREACH,
         match: null,
         candidateEvidence: null,
         companyEvidence: null,
-        refusalReason: NoOutreachAngleReason.LOW_RELATIONSHIP_STRENGTH,
+        candidateFacts,
         compositeScore: 0,
       };
     }
